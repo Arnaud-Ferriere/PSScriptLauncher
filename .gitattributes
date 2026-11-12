@@ -1,0 +1,11 @@
+# Les fichiers sont en UTF-8 avec BOM et fins de ligne CRLF : Windows PowerShell 5.1 lit un
+# fichier sans BOM dans la page de code ANSI, ce qui casserait les accents. On fige donc les
+# fins de ligne pour que Git ne les convertisse pas.
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
+*.psd1  text eol=crlf
+*.xaml  text eol=crlf
+*.md    text eol=crlf
+LICENSE text eol=crlf
+*.png   binary
+*.gif   binary

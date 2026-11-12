@@ -1,0 +1,23 @@
+# Résultats de tests Pester et de couverture
+testResults.xml
+TestResults/
+coverage.xml
+
+# Fichiers temporaires (écriture atomique de l'état, éditeurs)
+*.tmp
+*~
+*.swp
+
+# État utilisateur : normalement dans %LOCALAPPDATA%, jamais dans le dépôt
+state.json
+
+# Paquets générés
+*.zip
+
+# Éditeurs et systèmes
+.vscode/*
+!.vscode/settings.json
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
