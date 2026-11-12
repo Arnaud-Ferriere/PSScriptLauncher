@@ -1,13 +1,13 @@
-﻿# Tests Pester (5.2 ou plus récent) du module ScriptLauncher : analyse des scripts, construction
+﻿# Tests Pester (5.2 ou plus récent) du module PSScriptLauncher : analyse des scripts, construction
 # de la commande, état par utilisateur. L'interface WPF n'est pas couverte ici.
 #
-#   Invoke-Pester -Path .\ScriptLauncher\Tests
+#   Invoke-Pester -Path .\PSScriptLauncher\Tests
 #
 # Windows PowerShell 5.1 est livré avec Pester 3 : installer une version récente au préalable
 # (Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck).
 
 BeforeAll {
-    Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'ScriptLauncher.psd1') -Force
+    Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'PSScriptLauncher.psd1') -Force
 
     function New-TestScript {
         # Écrit un script de test en UTF-8 avec BOM et renvoie son chemin.
@@ -73,7 +73,7 @@ param(
     }
 
     It 'lit le synopsis, la description et les exigences sans exécuter le script' {
-        InModuleScope ScriptLauncher -Parameters @{ Path = $script:AccountScript } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $script:AccountScript } {
             param($Path)
             $info = Get-ScriptInfo -LiteralPath $Path
             $info.Synopsis | Should -Be 'Crée un compte.'
@@ -85,7 +85,7 @@ param(
     }
 
     It 'détermine la catégorie de saisie de chaque paramètre' {
-        InModuleScope ScriptLauncher -Parameters @{ Path = $script:AccountScript } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $script:AccountScript } {
             param($Path)
             $kinds = @{}
             foreach ($parameter in (Get-ScriptInfo -LiteralPath $Path).Parameters) { $kinds[$parameter.Name] = $parameter.Kind }
@@ -101,7 +101,7 @@ param(
     }
 
     It 'lit les jeux de paramètres, les alias et les descriptions' {
-        InModuleScope ScriptLauncher -Parameters @{ Path = $script:AccountScript } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $script:AccountScript } {
             param($Path)
             $info = Get-ScriptInfo -LiteralPath $Path
             $info.ParameterSets | Should -Be @('Single', 'Csv')
@@ -116,7 +116,7 @@ param(
     }
 
     It 'lit ValidateRange et ValidatePattern' {
-        InModuleScope ScriptLauncher -Parameters @{ Path = $script:AccountScript } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $script:AccountScript } {
             param($Path)
             $info = Get-ScriptInfo -LiteralPath $Path
             $level = $info.Parameters | Where-Object Name -EQ 'Level'
@@ -128,7 +128,7 @@ param(
     }
 
     It 'analyse les exemples : invite retirée, alias résolus, valeurs littérales ou non' {
-        InModuleScope ScriptLauncher -Parameters @{ Path = $script:AccountScript } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $script:AccountScript } {
             param($Path)
             $examples = @((Get-ScriptInfo -LiteralPath $Path).Examples)
             $examples.Count | Should -Be 2
@@ -145,7 +145,7 @@ param(
 
     It 'signale une aide collée à #Requires, que Get-Help ne voit pas' {
         $path = New-TestScript -Name 'Glued.ps1' -Content "#Requires -Version 5.1`n<#`n.SYNOPSIS`n    Aide collée.`n#>`nparam([string]`$Name)`n"
-        InModuleScope ScriptLauncher -Parameters @{ Path = $path } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path } {
             param($Path)
             $info = Get-ScriptInfo -LiteralPath $Path
             $info.Synopsis | Should -Be 'Aide collée.'
@@ -155,7 +155,7 @@ param(
 
     It 'ne signale rien pour une bibliothèque de fonctions' {
         $path = New-TestScript -Name 'Lib.ps1' -Content "<#`n.SYNOPSIS`n    Aide de Get-Truc.`n#>`nfunction Get-Truc { }`n`nfunction Get-Machin { }`n"
-        InModuleScope ScriptLauncher -Parameters @{ Path = $path } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path } {
             param($Path)
             $info = Get-ScriptInfo -LiteralPath $Path
             $info.Synopsis | Should -BeNullOrEmpty
@@ -165,7 +165,7 @@ param(
 
     It 'signale une erreur de syntaxe ou un fichier illisible sans lever d''exception' {
         $path = New-TestScript -Name 'Broken.ps1' -Content "param([string]`$Name)`nif (`$Name {`n"
-        InModuleScope ScriptLauncher -Parameters @{ Path = $path; Missing = (Join-Path $TestDrive 'absent.ps1') } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path; Missing = (Join-Path $TestDrive 'absent.ps1') } {
             param($Path, $Missing)
             ((Get-ScriptInfo -LiteralPath $Path).Warnings -join ' ') | Should -Match 'Erreur de syntaxe'
             ((Get-ScriptInfo -LiteralPath $Missing).Warnings -join ' ') | Should -Match 'Lecture impossible'
@@ -177,7 +177,7 @@ param(
         $ansi = [System.Text.Encoding]::GetEncoding([System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ANSICodePage)
         if ($ansi.CodePage -eq 65001) { Set-ItResult -Skipped -Because 'la page de code ANSI du système est UTF-8' }
         [System.IO.File]::WriteAllBytes($path, $ansi.GetBytes("<#`n.SYNOPSIS`n    Créé à l'été.`n#>`nparam()`n"))
-        InModuleScope ScriptLauncher -Parameters @{ Path = $path } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path } {
             param($Path)
             (Get-ScriptInfo -LiteralPath $Path).Synopsis | Should -Be "Créé à l'été."
         }
@@ -189,7 +189,7 @@ Describe 'Inventaire d''un dossier' {
         $script:CatalogRoot = Join-Path $TestDrive 'catalog'
         $names = @(
             (Join-Path 'B' 'Two.ps1'), (Join-Path 'A' 'One.ps1'), (Join-Path 'A' 'One.Tests.ps1'), 'Root.ps1',
-            (Join-Path (Join-Path 'ScriptLauncher' 'Private') 'Inner.ps1')
+            (Join-Path (Join-Path 'PSScriptLauncher' 'Private') 'Inner.ps1')
         )
         foreach ($name in $names) {
             $null = New-TestScript -Name (Join-Path 'catalog' $name) -Content "<#`n.SYNOPSIS`n    $name`n#>`nparam()`n"
@@ -197,11 +197,11 @@ Describe 'Inventaire d''un dossier' {
     }
 
     It 'liste les scripts triés, hors motifs et dossiers exclus, et renseigne la progression' {
-        InModuleScope ScriptLauncher -Parameters @{ Root = $script:CatalogRoot } {
+        InModuleScope PSScriptLauncher -Parameters @{ Root = $script:CatalogRoot } {
             param($Root)
             $progress = [hashtable]::Synchronized(@{ Total = 0; Done = 0 })
             $catalog = Get-ScriptCatalog -Root $Root -ExcludePattern '*.Tests.ps1' -Summary -Progress $progress `
-                -ExcludeDirectory (Join-Path $Root 'ScriptLauncher')
+                -ExcludeDirectory (Join-Path $Root 'PSScriptLauncher')
             $catalog.Scripts.Name | Should -Be @('One.ps1', 'Two.ps1', 'Root.ps1')
             $progress['Total'] | Should -Be 3
             $progress['Done'] | Should -Be 3
@@ -210,14 +210,14 @@ Describe 'Inventaire d''un dossier' {
     }
 
     It 'refuse un chemin qui n''est pas un dossier' {
-        InModuleScope ScriptLauncher -Parameters @{ File = (Join-Path $script:CatalogRoot 'Root.ps1') } {
+        InModuleScope PSScriptLauncher -Parameters @{ File = (Join-Path $script:CatalogRoot 'Root.ps1') } {
             param($File)
             { Get-ScriptCatalog -Root $File } | Should -Throw
         }
     }
 
     It 'filtre sans tenir compte de la casse ni des accents, tous les termes étant requis' {
-        InModuleScope ScriptLauncher {
+        InModuleScope PSScriptLauncher {
             $entry = [pscustomobject]@{ RelativePath = 'AD\Get-Report.ps1'; Synopsis = 'Comptes désactivés' }
             Test-ScriptFilter -ScriptInfo $entry -Filter 'DESACTIVES report' | Should -BeTrue
             Test-ScriptFilter -ScriptInfo $entry -Filter 'report licence' | Should -BeFalse
@@ -235,7 +235,7 @@ Describe 'Construction de la commande' {
     }
 
     It 'réécrit dates et nombres saisis en français au format invariant' {
-        InModuleScope ScriptLauncher {
+        InModuleScope PSScriptLauncher {
             [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
             ConvertTo-InvariantDate -Text '09/11/2026' | Should -Be '2026-11-09'
             ConvertTo-InvariantDate -Text '09/11/2026 14:30' | Should -Be '2026-11-09T14:30:00'
@@ -247,7 +247,7 @@ Describe 'Construction de la commande' {
     }
 
     It 'double les apostrophes, droites et typographiques' {
-        InModuleScope ScriptLauncher {
+        InModuleScope PSScriptLauncher {
             ConvertTo-PSQuotedString -Value "O'Brien" | Should -Be "'O''Brien'"
             $curly = [string][char]0x2019
             ConvertTo-PSQuotedString -Value "l${curly}été" | Should -Be "'l${curly}${curly}été'"
@@ -260,7 +260,7 @@ param([string]$Text, [string[]]$List, [int]$Count, [decimal]$Amount, [datetime]$
 '{0}|{1}|{2}|{3}|{4}|{5}' -f $Text, ($List -join '+'), $Count, $Amount.ToString([cultureinfo]::InvariantCulture),
     $When.ToString('yyyy-MM-dd', [cultureinfo]::InvariantCulture), $Force.IsPresent
 '@
-        $command = InModuleScope ScriptLauncher -Parameters @{ Path = $echo } {
+        $command = InModuleScope PSScriptLauncher -Parameters @{ Path = $echo } {
             param($Path)
             [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
             $info = Get-ScriptInfo -LiteralPath $Path
@@ -289,7 +289,7 @@ param(
     [ValidateRange(0.5, 2)][double[]]$Ratios
 )
 '@
-        InModuleScope ScriptLauncher -Parameters @{ Path = $path } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path } {
             param($Path)
             [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
             $info = Get-ScriptInfo -LiteralPath $Path
@@ -306,7 +306,7 @@ param(
 
     It 'ne met jamais de secret dans la commande : Get-Credential et Read-Host sont appelés au lancement' {
         $path = New-TestScript -Name 'Secret.ps1' -Content 'param([pscredential]$Credential, [securestring]$Password)'
-        InModuleScope ScriptLauncher -Parameters @{ Path = $path } {
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path } {
             param($Path)
             $info = Get-ScriptInfo -LiteralPath $Path
             $values = @{ Credential = [pscustomobject]@{ Prompt = $true; UserName = 'DOM\adm' }; Password = $true }
@@ -317,7 +317,7 @@ param(
     }
 
     It 'échappe les arguments pour la ligne de commande Windows' {
-        InModuleScope ScriptLauncher {
+        InModuleScope PSScriptLauncher {
             ConvertTo-ProcessArgument -Value 'simple' | Should -Be 'simple'
             ConvertTo-ProcessArgument -Value 'a b' | Should -Be '"a b"'
             ConvertTo-ProcessArgument -Value 'a"b' | Should -Be '"a\"b"'
@@ -328,9 +328,15 @@ param(
 }
 
 Describe 'État par utilisateur' {
+    It 'place l''état dans le profil, au nom du lanceur' {
+        InModuleScope PSScriptLauncher {
+            Get-DefaultStatePath | Should -BeLike '*\PSScriptLauncher\state.json'
+        }
+    }
+
     It 'enregistre et relit favoris, récents et saisies, tableaux compris' {
         $statePath = Join-Path (Join-Path $TestDrive 'state') 'state.json'
-        InModuleScope ScriptLauncher -Parameters @{ StatePath = $statePath } {
+        InModuleScope PSScriptLauncher -Parameters @{ StatePath = $statePath } {
             param($StatePath)
             $state = Read-UserState -Path $StatePath
             $state.Favorites.Count | Should -Be 0
@@ -363,7 +369,7 @@ Describe 'État par utilisateur' {
     }
 
     It 'limite les récents et place le dernier lancé en tête, sans doublon' {
-        InModuleScope ScriptLauncher {
+        InModuleScope PSScriptLauncher {
             $state = New-UserState
             1..12 | ForEach-Object { Set-RememberedInput -State $state -ScriptPath "C:\S\$_.ps1" }
             Set-RememberedInput -State $state -ScriptPath 'C:\S\10.PS1'
@@ -374,7 +380,7 @@ Describe 'État par utilisateur' {
     }
 
     It 'ne conserve pas une valeur saisie en clair dont le nom évoque un secret' {
-        InModuleScope ScriptLauncher {
+        InModuleScope PSScriptLauncher {
             $secret = [pscustomobject]@{ Name = 'ApiToken'; Kind = 'Text' }
             $plain = [pscustomobject]@{ Name = 'Name'; Kind = 'Text' }
             $credential = [pscustomobject]@{ Name = 'Credential'; Kind = 'Credential' }
@@ -394,7 +400,7 @@ Describe 'État par utilisateur' {
     It 'repart d''un état vide si le fichier est corrompu' {
         $statePath = Join-Path $TestDrive 'corrompu.json'
         Set-Content -LiteralPath $statePath -Value '{ pas du JSON'
-        InModuleScope ScriptLauncher -Parameters @{ StatePath = $statePath } {
+        InModuleScope PSScriptLauncher -Parameters @{ StatePath = $statePath } {
             param($StatePath)
             $state = Read-UserState -Path $StatePath
             $state.Favorites.Count | Should -Be 0

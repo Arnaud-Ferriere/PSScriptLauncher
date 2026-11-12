@@ -57,7 +57,7 @@ function New-LauncherState {
     @{
         Root           = $Root
         ExcludePattern = $ExcludePattern
-        LauncherPath   = Join-Path (Split-Path -Parent $script:ModuleRoot) 'Show-ScriptLauncher.ps1'
+        LauncherPath   = Join-Path (Split-Path -Parent $script:ModuleRoot) 'Show-PSScriptLauncher.ps1'
         DefaultEdition = $PSVersionTable.PSEdition
         StatePath      = $StatePath
         UserState      = Read-UserState -Path $StatePath
@@ -319,6 +319,8 @@ function Complete-CatalogScan {
 
     $script:State.Scripts = @($catalog.Scripts)
     $script:Window.Title = "Lanceur de scripts - $($catalog.Root)"
+    $script:Ui.RootText.Text = $catalog.Root
+    $script:Ui.RootText.ToolTip = $catalog.Root
     Update-ScriptTree
 
     $message = '{0} script(s) · {1:N1} s' -f $script:State.Scripts.Count, $scan.Watch.Elapsed.TotalSeconds
@@ -334,6 +336,28 @@ function Complete-CatalogScan {
         $refreshed = Get-ScriptInfo -LiteralPath $current.Path -RelativePath $current.RelativePath
         Show-ScriptDetail -ScriptInfo $refreshed
     }
+}
+
+function Select-LauncherRoot {
+    # « Dossier... » : choisit le dossier à analyser et relance l'inventaire.
+    $selected = Select-FolderPath -InitialDirectory $script:State.Root
+    if (-not $selected) { return }
+    $root = (Resolve-Path -LiteralPath $selected).ProviderPath
+    if ($root -eq $script:State.Root) {
+        Set-Status 'Ce dossier est déjà affiché.'
+        return
+    }
+
+    # Tout ce qui vient de l'ancien dossier disparaît : arborescence, sélection, filtre
+    $script:State.Root = $root
+    $script:State.TreeFolders = @{}
+    $script:Ui.ScriptTree.Items.Clear()
+    $script:Ui.SearchBox.Text = ''
+    Reset-ScriptDetail
+    $script:Window.Title = "Lanceur de scripts - $root"
+    $script:Ui.RootText.Text = $root
+    $script:Ui.RootText.ToolTip = $root
+    Start-CatalogScan
 }
 
 function Initialize-EngineList {
@@ -409,6 +433,36 @@ function Restore-RememberedInput {
         }
     }
     $restored
+}
+
+function Reset-ScriptDetail {
+    # Partie droite au repos : aucun script affiché (démarrage, ou changement de dossier).
+    $ui = $script:Ui
+    $script:State.Current = $null
+    $script:State.CurrentSet = ''
+    $script:State.Rows = @()
+    $script:State.LastCommand = $null
+    $ui.ScriptTitle.Text = 'Sélectionnez un script'
+    $ui.ScriptPath.Text = ''
+    $ui.ScriptPath.ToolTip = $null
+    $ui.ScriptSynopsis.Text = ''
+    Set-OptionalText -Element $ui.ScriptInfo -Text ''
+    Set-OptionalText -Element $ui.ScriptWarning -Text ''
+    $ui.ScriptDescription.Text = ''
+    $ui.DescriptionPanel.Visibility = [System.Windows.Visibility]::Collapsed
+    $ui.HelpText.Text = ''
+    $ui.SetCombo.Items.Clear()
+    $ui.SetPanel.Visibility = [System.Windows.Visibility]::Collapsed
+    $ui.ExampleCombo.Items.Clear()
+    $ui.ExamplePanel.Visibility = [System.Windows.Visibility]::Collapsed
+    $ui.ParamPanel.Children.Clear()
+    $ui.VerboseCheck.Visibility = [System.Windows.Visibility]::Collapsed
+    $ui.WhatIfCheck.Visibility = [System.Windows.Visibility]::Collapsed
+    $ui.CommandBox.Text = ''
+    foreach ($button in @($ui.RunButton, $ui.CopyButton, $ui.LocateButton, $ui.ResetButton)) { $button.IsEnabled = $false }
+    $ui.FavoriteButton.IsEnabled = $false
+    $ui.FavoriteButton.Content = '☆ Favori'
+    $ui.DetailTabs.SelectedIndex = 0
 }
 
 function Show-ScriptDetail {
@@ -699,6 +753,7 @@ function Register-UiEvent {
     $ui.CopyButton.Add_Click({ Invoke-UiAction { Copy-CommandToClipboard } })
     $ui.LocateButton.Add_Click({ Invoke-UiAction { Show-ScriptLocation } })
     $ui.RefreshButton.Add_Click({ Invoke-UiAction { Start-CatalogScan } })
+    $ui.FolderButton.Add_Click({ Invoke-UiAction { Select-LauncherRoot } })
     $ui.FavoriteButton.Add_Click({ Invoke-UiAction { Switch-CurrentFavorite } })
     $ui.ResetButton.Add_Click({ Invoke-UiAction { Clear-ScriptForm } })
     $ui.ExampleCombo.Add_SelectionChanged({
@@ -719,6 +774,10 @@ function Register-UiEvent {
             if ($keyArgs.Key -eq [System.Windows.Input.Key]::F5) {
                 $keyArgs.Handled = $true
                 Invoke-UiAction { Start-CatalogScan }
+            }
+            elseif ($keyArgs.Key -eq [System.Windows.Input.Key]::O -and $isControl) {
+                $keyArgs.Handled = $true
+                Invoke-UiAction { Select-LauncherRoot }
             }
             elseif ($keyArgs.Key -eq [System.Windows.Input.Key]::F -and $isControl) {
                 $keyArgs.Handled = $true
@@ -744,7 +803,7 @@ function Initialize-LauncherWindow {
     $script:Window = [System.Windows.Markup.XamlReader]::Parse([System.IO.File]::ReadAllText($xamlPath))
     $script:Ui = @{}
     $names = @(
-        'SearchBox', 'SearchHint', 'ScriptTree', 'StatusText', 'RefreshButton', 'ScriptTitle', 'ScriptPath',
+        'SearchBox', 'SearchHint', 'RootText', 'ScriptTree', 'StatusText', 'RefreshButton', 'FolderButton', 'ScriptTitle', 'ScriptPath',
         'ScriptSynopsis', 'ScriptInfo', 'ScriptWarning', 'DetailTabs', 'DescriptionPanel', 'ScriptDescription',
         'SetPanel', 'SetCombo', 'ParamPanel', 'VerboseCheck', 'WhatIfCheck', 'ExtraArgsBox', 'HelpText',
         'CommandBox', 'EngineCombo', 'NoExitCheck', 'NoProfileCheck', 'ElevateCheck', 'LocateButton',

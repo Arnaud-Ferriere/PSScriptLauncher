@@ -1,5 +1,5 @@
 ﻿@{
-    RootModule           = 'ScriptLauncher.psm1'
+    RootModule           = 'PSScriptLauncher.psm1'
     ModuleVersion        = '2.0.0'
     GUID                 = '6f0d9a3e-5b1c-4e7a-9a52-3c8f2d7b4e10'
     Author               = 'Arnaud Ferrière'
@@ -7,20 +7,20 @@
     Description          = 'Lanceur graphique (WPF) pour les scripts PowerShell d''un dossier, à partir de leur aide intégrée.'
     PowerShellVersion    = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
-    FunctionsToExport    = @('Show-ScriptLauncher')
+    FunctionsToExport    = @('Show-PSScriptLauncher')
     CmdletsToExport      = @()
     VariablesToExport    = @()
     AliasesToExport      = @()
     PrivateData          = @{
         PSData = @{
             Tags       = @('WPF', 'GUI', 'Launcher', 'Show-Command', 'Windows')
-            LicenseUri = 'https://github.com/<compte>/ScriptLauncher/blob/main/LICENSE'
-            ProjectUri = 'https://github.com/<compte>/ScriptLauncher'
+            LicenseUri = 'https://github.com/Arnaud-Ferriere/PSScriptLauncher/blob/main/LICENSE'
+            ProjectUri = 'https://github.com/Arnaud-Ferriere/PSScriptLauncher'
         }
     }
     FileList             = @(
-        'ScriptLauncher.psd1'
-        'ScriptLauncher.psm1'
+        'PSScriptLauncher.psd1'
+        'PSScriptLauncher.psm1'
         'MainWindow.xaml'
         'Private\Settings.ps1'
         'Private\Analysis.ps1'

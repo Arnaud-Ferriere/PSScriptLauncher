@@ -6,8 +6,8 @@
     et de ses sous-dossiers, à partir de l'aide intégrée à chaque script.
 
 .DESCRIPTION
-    Point d'entrée du lanceur : charge le module ScriptLauncher (dossier voisin) et ouvre la
-    fenêtre sur le dossier indiqué.
+    Point d'entrée du lanceur : charge le module PSScriptLauncher (dossier voisin) et ouvre
+    la fenêtre sur le dossier indiqué.
 
     Le lanceur lit, pour chaque script .ps1, le bloc param() et l'aide comment-based par analyse
     syntaxique (AST) : les scripts ne sont jamais exécutés pendant la lecture. L'inventaire se
@@ -34,31 +34,35 @@
       Get-Credential ou Read-Host -AsSecureString dans la console lancée.
 
     Données personnelles : favoris, scripts récents et dernière saisie lancée de chaque script
-    sont enregistrés dans le profil de l'utilisateur connecté (%LOCALAPPDATA%\ScriptLauncher),
-    jamais dans le dossier des scripts. Les valeurs des paramètres dont le nom évoque un secret
-    (password, token, secret, key...) ne sont pas conservées.
+    sont enregistrés dans le profil de l'utilisateur connecté
+    (%LOCALAPPDATA%\PSScriptLauncher), jamais dans le dossier des scripts. Les valeurs des
+    paramètres dont le nom évoque un secret (password, token, secret, key...) ne sont pas
+    conservées.
 
-    Raccourcis : Ctrl+F (recherche), F5 (actualiser), Ctrl+Entrée (lancer).
+    Le dossier analysé est celui de ce script, ou celui de -Path. Il peut être changé en cours
+    d'utilisation (bouton « Dossier... », Ctrl+O) : l'inventaire est relancé sans redémarrer.
+
+    Raccourcis : Ctrl+O (dossier), Ctrl+F (recherche), F5 (actualiser), Ctrl+Entrée (lancer).
 
 .PARAMETER Path
     Dossier racine à parcourir. Par défaut : le dossier qui contient ce lanceur.
 
 .PARAMETER ExcludePattern
     Motifs (caractères génériques) appliqués au chemin relatif et au nom des scripts à masquer.
-    Par défaut : les fichiers de tests Pester (*.Tests.ps1). Le dossier ScriptLauncher (le
+    Par défaut : les fichiers de tests Pester (*.Tests.ps1). Le dossier PSScriptLauncher (le
     lanceur lui-même) est toujours ignoré.
 
 .PARAMETER StatePath
     Fichier d'état de l'utilisateur (favoris, récents, saisies). Par défaut :
-    %LOCALAPPDATA%\ScriptLauncher\state.json.
+    %LOCALAPPDATA%\PSScriptLauncher\state.json.
 
 .EXAMPLE
-    .\Show-ScriptLauncher.ps1
+    .\Show-PSScriptLauncher.ps1
 
     Ouvre le lanceur sur le dossier qui contient ce script.
 
 .EXAMPLE
-    .\Show-ScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*', '*\_Archives\*'
+    .\Show-PSScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*', '*\_Archives\*'
 
     Masque aussi les bibliothèques dot-sourcées et les archives.
 
@@ -73,10 +77,10 @@
 
     Prérequis : Windows, Windows PowerShell 5.1 ou PowerShell 7+, session STA (défaut des deux
     consoles) et mode de langage FullLanguage (WPF n'est pas utilisable en ConstrainedLanguage).
-    Le dossier ScriptLauncher doit se trouver à côté de ce script.
+    Le dossier PSScriptLauncher doit se trouver à côté de ce script.
 
     Raccourci conseillé, qui masque la console du lanceur :
-        powershell.exe -NoProfile -WindowStyle Hidden -File "<dossier>\Show-ScriptLauncher.ps1"
+        powershell.exe -NoProfile -WindowStyle Hidden -File "<dossier>\Show-PSScriptLauncher.ps1"
 
     Chaque script est lancé dans son propre processus (nouvelle console) : un exit, une erreur
     ou un Read-Host dans un script n'affecte pas le lanceur.
@@ -97,7 +101,7 @@ $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($Path)) { $Path = $PSScriptRoot }
 
-$manifest = Join-Path (Join-Path $PSScriptRoot 'ScriptLauncher') 'ScriptLauncher.psd1'
+$manifest = Join-Path (Join-Path $PSScriptRoot 'PSScriptLauncher') 'PSScriptLauncher.psd1'
 try {
     Import-Module -Name $manifest -Force
 }
@@ -115,4 +119,4 @@ catch {
 
 $launcherParameters = @{ Path = $Path; ExcludePattern = $ExcludePattern }
 if ($StatePath) { $launcherParameters['StatePath'] = $StatePath }
-Show-ScriptLauncher @launcherParameters
+Show-PSScriptLauncher @launcherParameters

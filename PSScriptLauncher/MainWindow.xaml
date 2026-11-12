@@ -15,6 +15,12 @@
         <TextBlock x:Name="SearchHint" Text="Rechercher (nom, dossier, synopsis)   Ctrl+F" Foreground="Gray"
                    Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
       </Grid>
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+        <Button x:Name="FolderButton" DockPanel.Dock="Right" Content="Dossier..." Padding="10,3" Margin="6,0,0,0"
+                ToolTip="Changer le dossier analysé (Ctrl+O)"/>
+        <TextBlock x:Name="RootText" VerticalAlignment="Center" Foreground="Gray"
+                   TextTrimming="CharacterEllipsis"/>
+      </DockPanel>
       <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
         <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Actualiser (F5)" Padding="10,3" Margin="6,0,0,0"/>
         <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="Gray" TextTrimming="CharacterEllipsis"/>

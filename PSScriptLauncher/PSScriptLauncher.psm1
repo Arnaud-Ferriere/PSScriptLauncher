@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 
-# Module du lanceur de scripts. Une seule commande publique : Show-ScriptLauncher.
+# Module du lanceur de scripts. Une seule commande publique : Show-PSScriptLauncher.
 # Les fichiers de Private ne contiennent que des fonctions (et les réglages) ; l'ordre de
 # chargement ne compte que pour Settings.ps1, qui doit venir en premier.
 
@@ -13,7 +13,7 @@ foreach ($name in $privateFiles) {
     . (Join-Path (Join-Path $PSScriptRoot 'Private') "$name.ps1")
 }
 
-function Show-ScriptLauncher {
+function Show-PSScriptLauncher {
     <#
     .SYNOPSIS
         Ouvre le lanceur graphique de scripts PowerShell sur un dossier.
@@ -34,10 +34,11 @@ function Show-ScriptLauncher {
         Motifs (caractères génériques) appliqués au chemin relatif et au nom des scripts à masquer.
 
     .PARAMETER StatePath
-        Fichier d'état de l'utilisateur. Par défaut : %LOCALAPPDATA%\ScriptLauncher\state.json.
+        Fichier d'état de l'utilisateur. Par défaut :
+        %LOCALAPPDATA%\PSScriptLauncher\state.json.
 
     .EXAMPLE
-        Show-ScriptLauncher -Path C:\Scripts
+        Show-PSScriptLauncher -Path C:\Scripts
 
     .INPUTS
         None.
@@ -82,4 +83,4 @@ function Show-ScriptLauncher {
     }
 }
 
-Export-ModuleMember -Function 'Show-ScriptLauncher'
+Export-ModuleMember -Function 'Show-PSScriptLauncher'

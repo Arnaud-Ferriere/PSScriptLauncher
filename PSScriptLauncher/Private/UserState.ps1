@@ -3,8 +3,8 @@
 # des scripts : rien n'est partagé avec les collègues ni visible par eux.
 
 function Get-DefaultStatePath {
-    # %LOCALAPPDATA%\ScriptLauncher\state.json
-    $folder = Join-Path ([System.Environment]::GetFolderPath('LocalApplicationData')) 'ScriptLauncher'
+    # %LOCALAPPDATA%\PSScriptLauncher\state.json
+    $folder = Join-Path ([System.Environment]::GetFolderPath('LocalApplicationData')) 'PSScriptLauncher'
     Join-Path $folder 'state.json'
 }
 
