@@ -1,8 +1,8 @@
 # PSScriptLauncher
 
-A graphical launcher for the PowerShell scripts of a folder, in the spirit of `Show-Command`,
-built on what each script already contains: its `param()` block and its comment-based help.
-Nothing to configure, no server to install.
+`Show-Command` and `Get-Help` have made a baby, and the little bugger took steroids.
+It's built on what each script already contains: its `param()` block and its comment-based help.
+The script is self sufficient : no .exe or server to install.
 
 ![PSScriptLauncher](Docs/screenshot-parameters.png)
 
@@ -50,7 +50,7 @@ Nothing to configure, no server to install.
    powershell.exe -ExecutionPolicy Bypass -File .\Show-PSScriptLauncher.ps1
    ```
 
-   For a permanent change: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+   For a permanent change: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Be responsible when using that !
 
 ## Usage
 
@@ -58,14 +58,14 @@ Nothing to configure, no server to install.
 .\Show-PSScriptLauncher.ps1                                  # the launcher's own folder
 .\Show-PSScriptLauncher.ps1 -Path D:\Scripts                 # another folder
 .\Show-PSScriptLauncher.ps1 -Path D:\Scripts -Language fr     # French interface
-.\Show-PSScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*'
+.\Show-PSScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*' # PSScriptLauncher will list the scripts excluding the patterns selected
 ```
 
 The analyzed folder is the launcher's own, or the one given to `-Path`. It is shown under the
 search box and can be changed while the window is open, without restarting: **Folder...** button
 or `Ctrl+O`.
 
-A shortcut is recommended, as it hides the launcher's console:
+A shortcut is recommended to hide the launcher's console:
 
 ```text
 powershell.exe -NoProfile -WindowStyle Hidden -File "<folder>\Show-PSScriptLauncher.ps1"
@@ -82,6 +82,27 @@ remembered), or forced with `-Language en|fr`.
 Every string lives in `PSScriptLauncher\Lang\<code>\*.psd1`, one catalog per language and per
 area (window, form, analysis, command, help). Adding a language means adding a folder: the
 catalog is loaded at startup and a missing key is reported in the tests.
+
+**Missing your language? Feel free to open a pull request with a new catalog or an issue with
+your translated files attached, if you would rather not touch Git.**
+
+### Translating the interface
+
+1. Copy the `PSScriptLauncher\Lang\en` folder to `PSScriptLauncher\Lang\<code>` (for example
+   `Lang\de`).
+2. Translate the **values only**: keys are flat, identical in every catalog, and the test suite
+   fails as soon as one is missing on either side.
+3. Declare the code in `Private\Text.ps1` (`Get-UiLanguageName`, with the language's own name:
+   `Deutsch`) and in the `FileList` of `PSScriptLauncher.psd1`.
+4. Keep the files UTF-8 with BOM and CRLF, then run
+   `Invoke-Pester -Path .\PSScriptLauncher\Tests`: the catalogs, the keys referenced by the code
+   and the number formatting (`0.5` vs `0,5`) are already checked.
+5. Open a pull request against `main`. If Git is not your thing, open an issue and attach the
+   `.psd1` files: they will be integrated for you.
+
+Nothing to install to get started: in the GitHub web interface, **Add file → Create new file**
+and type `PSScriptLauncher/Lang/de/window.psd1` — the slashes create the folders — then GitHub
+offers to open the pull request for you.
 
 ![French interface](Docs/screenshot-french.png)
 
