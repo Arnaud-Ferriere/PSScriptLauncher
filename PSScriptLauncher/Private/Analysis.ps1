@@ -1,9 +1,9 @@
-﻿# Lecture et analyse des scripts par AST (aucune exécution). Aucune dépendance à WPF :
-# ce fichier est aussi chargé seul dans le runspace d'inventaire.
+﻿# Reads and analyzes scripts through the AST (no execution). No WPF dependency: this file is
+# also loaded on its own in the inventory runspace.
 
 function Read-ScriptText {
-    # Lit un script en respectant son encodage : BOM s'il y en a un, sinon UTF-8 strict, sinon
-    # page de code ANSI du système (c'est ainsi que Windows PowerShell 5.1 lit un fichier sans BOM).
+    # Reads a script with its own encoding: BOM when there is one, else strict UTF-8, else the
+    # system ANSI code page (this is how Windows PowerShell 5.1 reads a file without a BOM).
     param([Parameter(Mandatory)][string]$LiteralPath)
 
     $bytes = [System.IO.File]::ReadAllBytes($LiteralPath)
@@ -25,7 +25,7 @@ function Read-ScriptText {
             $ansi = [System.Text.Encoding]::GetEncoding($codePage)
         }
         catch {
-            $ansi = [System.Text.Encoding]::GetEncoding(28591)      # ISO-8859-1, toujours disponible
+            $ansi = [System.Text.Encoding]::GetEncoding(28591)      # ISO-8859-1, always available
         }
         return $ansi.GetString($bytes)
     }
@@ -40,7 +40,7 @@ function Get-NormalizedAttributeName {
 }
 
 function Get-AttributeArgument {
-    # Valeur d'un argument nommé d'attribut, lue sans exécuter de code (SafeGetValue).
+    # Value of a named attribute argument, read without running any code (SafeGetValue).
     param(
         [Parameter(Mandatory)][System.Management.Automation.Language.AttributeAst]$Attribute,
         [Parameter(Mandatory)][string]$Name,
@@ -60,7 +60,7 @@ function Get-AttributeArgument {
 }
 
 function Remove-CommonIndent {
-    # Retire l'indentation commune aux lignes non vides et les lignes vides en début et en fin.
+    # Removes the indentation common to non-blank lines and the leading/trailing blank lines.
     param([AllowNull()][AllowEmptyString()][string]$Text)
 
     if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
@@ -83,7 +83,7 @@ function Remove-CommonIndent {
 }
 
 function ConvertFrom-CommentToken {
-    # Texte d'une suite de jetons de commentaire, sans délimiteurs ni lignes #region/#endregion.
+    # Text of a run of comment tokens, without delimiters and without #region/#endregion lines.
     param([System.Management.Automation.Language.Token[]]$Token)
 
     $lines = [System.Collections.Generic.List[string]]::new()
@@ -102,9 +102,9 @@ function ConvertFrom-CommentToken {
 }
 
 function Get-InlineParameterHelp {
-    # Descriptions écrites en commentaire dans le bloc param(), avec la règle de Get-Help :
-    # dernier groupe de lignes de commentaire contiguës avant le paramètre, plus les
-    # commentaires placés entre ses attributs et son nom.
+    # Descriptions written as comments in the param() block, following the Get-Help rule:
+    # last group of contiguous comment lines before the parameter, plus the comments placed
+    # between its attributes and its name.
     param(
         [System.Management.Automation.Language.ParamBlockAst]$ParamBlock,
         [System.Management.Automation.Language.Token[]]$Tokens
@@ -125,7 +125,7 @@ function Get-InlineParameterHelp {
     foreach ($parameter in $ParamBlock.Parameters) {
         $parameterStart = $parameter.Extent.StartOffset
         $nameStart = $parameter.Name.Extent.StartOffset
-        $groups = [System.Collections.Generic.List[object]]::new()      # groupes de commentaires contigus
+        $groups = [System.Collections.Generic.List[object]]::new()      # groups of contiguous comments
         $current = $null
         $lastLine = -1
         $inside = [System.Collections.Generic.List[System.Management.Automation.Language.Token]]::new()
@@ -147,7 +147,7 @@ function Get-InlineParameterHelp {
                 $lastLine = $token.Extent.EndLineNumber
             }
             elseif ($kind -ne 'NewLine' -and $kind -ne 'LineContinuation') {
-                # Jeton significatif ( '(' ou ',' ) : les commentaires précédents ne concernent pas ce paramètre
+                # Significant token ( '(' or ',' ): the preceding comments do not concern this parameter
                 $groups.Clear()
                 $current = $null
             }
@@ -165,8 +165,8 @@ function Get-InlineParameterHelp {
 }
 
 function Find-MisplacedHelp {
-    # Bloc d'aide présent en tête de script mais que Get-Help n'attribue pas au script (mise en
-    # forme). Renvoie l'aide, lue à part, et la cause probable, pour l'afficher et la signaler.
+    # Help block at the top of the script that Get-Help does not attach to it (formatting).
+    # Returns the help, read separately, and the probable cause, to show it and report it.
     param(
         [Parameter(Mandatory)][System.Management.Automation.Language.ScriptBlockAst]$Ast,
         [System.Management.Automation.Language.Token[]]$Tokens
@@ -181,15 +181,15 @@ function Find-MisplacedHelp {
             Sort-Object -Property { $_.Extent.StartOffset }
     )
 
-    # Fichier qui ne contient que des définitions (bibliothèque de fonctions à dot-sourcer) :
-    # l'aide placée en tête est celle de la première fonction, il n'y a rien à signaler.
+    # File that only contains definitions (a function library to dot-source): the help placed at
+    # the top is the help of the first function, there is nothing to report.
     $definitions = @($statements | Where-Object {
             $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
             $_ -is [System.Management.Automation.Language.TypeDefinitionAst]
         })
     if (-not $Ast.ParamBlock -and $statements.Count -gt 0 -and $definitions.Count -eq $statements.Count) { return $null }
 
-    # L'aide de script ne peut se trouver qu'avant param() et avant la première instruction
+    # Script help can only be found before param() and before the first statement
     $limit = [int]::MaxValue
     if ($Ast.ParamBlock) {
         $limit = $Ast.ParamBlock.Extent.StartOffset
@@ -236,25 +236,23 @@ function Find-MisplacedHelp {
         $firstFunction = $statements[0]
     }
 
-    $reason = "Aide affichée, mais Get-Help ne la voit pas (bloc d'aide mal placé)."
+    $reason = Get-UiText 'analysis.warning.misplacedHelp'
     if ($isGluedToComment) {
         $label = ($previous.Text -split '\r?\n')[0].Trim()
         if ($label.Length -gt 45) { $label = $label.Substring(0, 45) + '...' }
-        $reason = 'Aide affichée, mais Get-Help ne la voit pas : il manque une ligne vide entre ' +
-            "« $label » et le bloc d'aide."
+        $reason = Get-UiText 'analysis.warning.misplacedHelpGlued' -Arguments @($label)
     }
     elseif ($isAfterUsing) {
-        $reason = "Aide affichée, mais Get-Help ne la voit pas : le bloc d'aide doit précéder les instructions using."
+        $reason = Get-UiText 'analysis.warning.misplacedHelpAfterUsing'
     }
     elseif ($firstFunction) {
-        $reason = "Get-Help rattache cette aide à la fonction $($firstFunction.Name), qui la suit. " +
-            "Si c'est l'aide du script, laissez deux lignes vides entre le bloc d'aide et la fonction."
+        $reason = Get-UiText 'analysis.warning.misplacedHelpOnFunction' -Arguments @($firstFunction.Name)
     }
     [pscustomobject]@{ Help = $help; Reason = $reason }
 }
 
 function Get-ValueKind {
-    # Catégorie de conversion d'une valeur scalaire : Number, Date ou Text.
+    # Conversion category of a scalar value: Number, Date or Text.
     param([type]$Type)
 
     if ($Type -in [datetime], [datetimeoffset]) { return 'Date' }
@@ -263,16 +261,16 @@ function Get-ValueKind {
 }
 
 function Test-IntegerType {
-    # Vrai pour un type entier : la saisie refuse alors les décimales.
+    # True for an integer type: input then refuses decimals.
     param([type]$Type)
 
     $Type -in [byte], [sbyte], [int16], [uint16], [int], [uint32], [long], [uint64], [bigint]
 }
 
 function Get-ParameterValidation {
-    # Contraintes [ValidateRange()] et [ValidatePattern()] d'un paramètre, lues sans rien exécuter.
-    # Renvoie @{ Range = @{ Min; Max }; Pattern = @{ Regex; Options; Message } } (clés absentes si
-    # l'attribut n'existe pas ou n'est pas constant).
+    # [ValidateRange()] and [ValidatePattern()] constraints of a parameter, read without running
+    # anything. Returns @{ Range = @{ Min; Max }; Pattern = @{ Regex; Options; Message } } (keys
+    # are missing when the attribute does not exist or is not constant).
     param([System.Management.Automation.Language.AttributeAst[]]$Attribute)
 
     $validation = @{}
@@ -291,7 +289,7 @@ function Get-ParameterValidation {
                     if (@($bounds).Count -eq 2) { $validation['Range'] = @{ Min = $bounds[0]; Max = $bounds[1] } }
                 }
                 elseif ($arguments.Count -eq 1) {
-                    # PowerShell 7 : [ValidateRange('Positive')] ou [ValidateRange([ValidateRangeKind]::Positive)]
+                    # PowerShell 7: [ValidateRange('Positive')] or [ValidateRange([ValidateRangeKind]::Positive)]
                     switch -Regex ($arguments[0].Extent.Text) {
                         'NonNegative' { $validation['Range'] = @{ Min = [decimal]0; Max = $null }; break }
                         'NonPositive' { $validation['Range'] = @{ Min = $null; Max = [decimal]0 }; break }
@@ -304,9 +302,9 @@ function Get-ParameterValidation {
                 if ($arguments.Count -ge 1) {
                     $regex = $null
                     try { $regex = [string]$arguments[0].SafeGetValue() }
-                    catch { Write-Verbose "ValidatePattern non constant ignoré : $($arguments[0].Extent.Text)" }
+                    catch { Write-Verbose "Non-constant ValidatePattern ignored: $($arguments[0].Extent.Text)" }
                     if ($regex) {
-                        # Comme PowerShell : insensible à la casse, sauf Options explicite
+                        # Like PowerShell: case-insensitive, unless Options is explicit
                         $options = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
                         $message = $null
                         foreach ($named in $item.NamedArguments) {
@@ -320,7 +318,7 @@ function Get-ParameterValidation {
                             }
                             elseif ($named.ArgumentName -eq 'ErrorMessage') {
                                 try { $message = [string]$named.Argument.SafeGetValue() }
-                                catch { Write-Verbose 'ErrorMessage non constant ignoré.' }
+                                catch { Write-Verbose 'Non-constant ErrorMessage ignored.' }
                             }
                         }
                         $validation['Pattern'] = @{ Regex = $regex; Options = $options; Message = $message }
@@ -333,7 +331,7 @@ function Get-ParameterValidation {
 }
 
 function Format-ParameterValidation {
-    # Libellés lisibles des contraintes d'un paramètre (« Intervalle : 1 à 10 », « Motif : ^\d+$ »).
+    # Readable labels of the constraints of a parameter ("Range: 1 to 10", "Pattern: ^\d+$").
     param([hashtable]$Validation)
 
     if (-not $Validation) { return }
@@ -341,23 +339,26 @@ function Format-ParameterValidation {
     if ($Validation.ContainsKey('Range')) {
         $range = $Validation['Range']
         if ($null -ne $range['Min'] -and $null -ne $range['Max']) {
-            'Intervalle : {0} à {1}' -f $range['Min'].ToString($culture), $range['Max'].ToString($culture)
+            Get-UiText 'analysis.validation.range' -Arguments @(
+                $range['Min'].ToString($culture), $range['Max'].ToString($culture))
         }
         elseif ($null -ne $range['Min']) {
             $operator = if ($range['ExcludeMin']) { '>' } else { '≥' }
-            'Valeur {0} {1}' -f $operator, $range['Min'].ToString($culture)
+            Get-UiText 'analysis.validation.bound' -Arguments @($operator, $range['Min'].ToString($culture))
         }
         else {
             $operator = if ($range['ExcludeMax']) { '<' } else { '≤' }
-            'Valeur {0} {1}' -f $operator, $range['Max'].ToString($culture)
+            Get-UiText 'analysis.validation.bound' -Arguments @($operator, $range['Max'].ToString($culture))
         }
     }
-    if ($Validation.ContainsKey('Pattern')) { 'Motif : ' + $Validation['Pattern'].Regex }
+    if ($Validation.ContainsKey('Pattern')) {
+        Get-UiText 'analysis.validation.pattern' -Arguments @($Validation['Pattern'].Regex)
+    }
 }
 
 function Get-ExampleArgumentValue {
-    # Valeur d'un argument lu dans un exemple : littérale si possible (chaîne, nombre, booléen,
-    # tableau de littéraux), sinon seulement son texte (variable, sous-expression...).
+    # Value of an argument read from an example: literal when possible (string, number, boolean,
+    # array of literals), otherwise only its text (variable, subexpression...).
     param([Parameter(Mandatory)][System.Management.Automation.Language.Ast]$Argument)
 
     $text = $Argument.Extent.Text
@@ -389,15 +390,15 @@ function Get-ExampleArgumentValue {
 }
 
 function ConvertFrom-ExampleText {
-    # Analyse un .EXAMPLE : retrouve l'appel du script et ses arguments nommés, pour pouvoir
-    # remplir le formulaire. $null si l'exemple n'appelle pas ce script.
+    # Parses an .EXAMPLE: finds the call to the script and its named arguments, so that the form
+    # can be filled in. $null when the example does not call this script.
     param(
         [AllowNull()][AllowEmptyString()][string]$Text,
         [Parameter(Mandatory)][string]$ScriptName,
         [object[]]$Parameter = @()
     )
 
-    # Le code de l'exemple est son premier paragraphe ; le reste est du commentaire ou de la sortie
+    # The example code is its first paragraph; the rest is comment or output
     $lines = [System.Collections.Generic.List[string]]::new()
     foreach ($line in ((Remove-CommonIndent -Text $Text) -split '\n')) {
         if (-not $line.Trim()) { break }
@@ -425,17 +426,17 @@ function ConvertFrom-ExampleText {
     for ($i = 1; $i -lt $elements.Count; $i++) {
         $element = $elements[$i]
         if ($element -isnot [System.Management.Automation.Language.CommandParameterAst]) {
-            $ignored.Add("$($element.Extent.Text) (argument sans nom)")
+            $ignored.Add((Get-UiText 'analysis.example.unnamed' -Arguments @($element.Extent.Text)))
             continue
         }
-        # Nom exact, alias, puis préfixe non ambigu, comme la liaison de paramètres de PowerShell
+        # Exact name, alias, then unambiguous prefix, like PowerShell parameter binding
         $name = $element.ParameterName
         $match = @($Parameter | Where-Object { $_.Name -eq $name -or $_.Aliases -contains $name })
         if ($match.Count -ne 1) { $match = @($Parameter | Where-Object { $_.Name -like "$name*" }) }
         if ($match.Count -ne 1) {
             if ($null -eq $element.Argument -and $i + 1 -lt $elements.Count -and
                 $elements[$i + 1] -isnot [System.Management.Automation.Language.CommandParameterAst]) { $i++ }
-            $ignored.Add("-$name (paramètre inconnu du formulaire)")
+            $ignored.Add((Get-UiText 'analysis.example.unknownParameter' -Arguments @($name)))
             continue
         }
         $target = $match[0]
@@ -456,7 +457,7 @@ function ConvertFrom-ExampleText {
 }
 
 function ConvertTo-ParameterInfo {
-    # Métadonnées d'un paramètre lues dans l'AST : type, catégorie de saisie, jeux, aide...
+    # Metadata of a parameter read from the AST: type, input category, sets, help...
     param(
         [Parameter(Mandatory)][System.Management.Automation.Language.ParameterAst]$Parameter,
         [System.Management.Automation.Language.CommentHelpInfo]$Help,
@@ -470,7 +471,7 @@ function ConvertTo-ParameterInfo {
         Where-Object { $_ -is [System.Management.Automation.Language.TypeConstraintAst] } |
         Select-Object -First 1
 
-    # StaticType vaut [object] quand le type est absent ou introuvable dans la session
+    # StaticType is [object] when the type is missing or cannot be found in the session
     $type = $Parameter.StaticType
     $typeName = 'Object'
     $isArray = $false
@@ -510,7 +511,7 @@ function ConvertTo-ParameterInfo {
             'Alias' {
                 foreach ($argument in $attribute.PositionalArguments) {
                     try { foreach ($value in @($argument.SafeGetValue())) { $aliases.Add([string]$value) } }
-                    catch { Write-Verbose "Alias non statique ignoré : $($argument.Extent.Text)" }
+                    catch { Write-Verbose "Non-static alias ignored: $($argument.Extent.Text)" }
                 }
             }
             'ValidateSet' {
@@ -518,7 +519,7 @@ function ConvertTo-ParameterInfo {
                 $isStatic = $true
                 foreach ($argument in $attribute.PositionalArguments) {
                     try { foreach ($value in @($argument.SafeGetValue())) { $values.Add([string]$value) } }
-                    catch { $isStatic = $false }     # [ValidateSet([Classe])] : valeurs calculées à l'exécution
+                    catch { $isStatic = $false }     # [ValidateSet([Class])]: values computed at run time
                 }
                 if ($isStatic -and $values.Count -gt 0) { $validValues = $values.ToArray() }
             }
@@ -543,7 +544,7 @@ function ConvertTo-ParameterInfo {
     elseif ($isArray) { $kind = 'TextArray' }
     else { $kind = Get-ValueKind -Type $type }
 
-    # Description : .PARAMETER, sinon commentaire dans param(), sinon HelpMessage
+    # Description: .PARAMETER, else a comment inside param(), else HelpMessage
     $description = $null
     if ($Help -and $Help.Parameters) {
         $key = $name.ToUpperInvariant()
@@ -576,9 +577,9 @@ function ConvertTo-ParameterInfo {
 }
 
 function Get-ScriptInfo {
-    # Lit un script (AST) et renvoie tout ce qu'il faut pour l'afficher et le lancer.
-    # -Summary : synopsis et avertissements seulement (inventaire rapide pour l'arborescence) ;
-    # l'analyse des paramètres, plus coûteuse, est faite à la sélection du script.
+    # Reads a script (AST) and returns everything needed to show it and launch it.
+    # -Summary: synopsis and warnings only (quick inventory for the tree); the parameter analysis,
+    # which is more expensive, is done when the script is selected.
     param(
         [Parameter(Mandatory)][string]$LiteralPath,
         [string]$RelativePath,
@@ -588,7 +589,7 @@ function Get-ScriptInfo {
     $warnings = [System.Collections.Generic.List[string]]::new()
     $text = ''
     try { $text = Read-ScriptText -LiteralPath $LiteralPath }
-    catch { $warnings.Add("Lecture impossible : $($_.Exception.Message)") }
+    catch { $warnings.Add((Get-UiText 'analysis.warning.readFailed' -Arguments @($_.Exception.Message))) }
 
     $tokens = $null
     $parseErrors = $null
@@ -597,15 +598,16 @@ function Get-ScriptInfo {
     $parseErrors = @($parseErrors | Where-Object { $_ })
     $shown = $script:Settings.MaxParseErrorShown
     foreach ($parseError in @($parseErrors | Select-Object -First $shown)) {
-        $warnings.Add(('Erreur de syntaxe ligne {0} : {1}' -f $parseError.Extent.StartLineNumber, $parseError.Message))
+        $warnings.Add((Get-UiText 'analysis.warning.parseError' `
+                -Arguments @($parseError.Extent.StartLineNumber, $parseError.Message)))
     }
     if ($parseErrors.Count -gt $shown) {
-        $warnings.Add(('... et {0} autre(s) erreur(s) de syntaxe.' -f ($parseErrors.Count - $shown)))
+        $warnings.Add((Get-UiText 'analysis.warning.moreParseError' -Arguments @($parseErrors.Count - $shown)))
     }
 
     $help = $null
     try { $help = $ast.GetHelpContent() }
-    catch { Write-Verbose "Aide illisible dans $LiteralPath : $($_.Exception.Message)" }
+    catch { Write-Verbose "Unreadable help in ${LiteralPath}: $($_.Exception.Message)" }
     if ($null -eq $help) {
         $misplaced = Find-MisplacedHelp -Ast $ast -Tokens $tokens
         if ($misplaced) {
@@ -632,7 +634,7 @@ function Get-ScriptInfo {
     $parameters = [System.Collections.Generic.List[object]]::new()
     $setNames = [System.Collections.Generic.List[string]]::new()
     if ($paramBlock -and -not $Summary) {
-        # Comme Get-Help : les commentaires de param() ne comptent que si le script a un bloc d'aide
+        # Like Get-Help: the comments of param() only count when the script has a help block
         $inlineHelp = @{}
         if ($help) { $inlineHelp = Get-InlineParameterHelp -ParamBlock $paramBlock -Tokens $tokens }
 
@@ -673,7 +675,7 @@ function Get-ScriptInfo {
     if ($defaultSet -and -not $setNames.Contains($defaultSet)) { $setNames.Insert(0, $defaultSet) }
     if (-not $defaultSet -and $setNames.Count -gt 0) { $defaultSet = $setNames[0] }
     if ($ast.DynamicParamBlock) {
-        $warnings.Add('Bloc DynamicParam : les paramètres dynamiques ne sont pas affichés.')
+        $warnings.Add((Get-UiText 'analysis.warning.dynamicParam'))
     }
 
     $requirements = [pscustomobject]@{ PSVersion = $null; PSEditions = @(); Modules = @(); RunAsAdmin = $false }
@@ -717,23 +719,23 @@ function Get-ScriptInfo {
 }
 
 function Get-ScriptCatalog {
-    # Inventaire récursif des scripts .ps1 du dossier racine.
+    # Recursive inventory of the .ps1 scripts of the root folder.
     param(
         [Parameter(Mandatory)][string]$Root,
         [string[]]$ExcludePattern = @(),
         [string]$ExcludeFile,
-        # Dossiers (chemins complets) à ignorer entièrement : le module du lanceur lui-même
+        # Folders (full paths) to ignore entirely: the module of the launcher itself
         [string[]]$ExcludeDirectory = @(),
-        # Table synchronisée { Total; Done } mise à jour au fil de l'analyse (inventaire en arrière-plan)
+        # Synchronized table { Total; Done } updated as the analysis goes (background inventory)
         [hashtable]$Progress,
         [switch]$Summary
     )
 
     $rootItem = Get-Item -LiteralPath $Root -ErrorAction Stop
-    if (-not $rootItem.PSIsContainer) { throw "Le chemin indiqué n'est pas un dossier : $Root" }
+    if (-not $rootItem.PSIsContainer) { throw (Get-UiText 'analysis.error.notFolder' -Arguments @($Root)) }
     $rootFull = $rootItem.FullName.TrimEnd('\', '/')
 
-    # Les dossiers illisibles (droits) n'interrompent pas l'inventaire : ils sont comptés et signalés
+    # Unreadable folders (rights) do not stop the inventory: they are counted and reported
     $scanErrors = $null
     $files = @(Get-ChildItem -LiteralPath $rootFull -Filter '*.ps1' -File -Recurse `
             -ErrorAction SilentlyContinue -ErrorVariable scanErrors)
@@ -743,7 +745,7 @@ function Get-ScriptCatalog {
         })
     $selected = [System.Collections.Generic.List[object]]::new()
     foreach ($file in $files) {
-        # -Filter '*.ps1' peut renvoyer des .ps1xml (noms courts 8.3) : on revérifie l'extension
+        # -Filter '*.ps1' can return .ps1xml files (8.3 short names): the extension is checked again
         if ($file.Extension -ne '.ps1') { continue }
         $isExcludedFile = $ExcludeFile -and
             [string]::Equals($file.FullName, $ExcludeFile, [System.StringComparison]::OrdinalIgnoreCase)
@@ -784,7 +786,7 @@ function Get-ScriptCatalog {
 }
 
 function Test-ScriptFilter {
-    # Recherche multi-termes (ET), insensible à la casse et aux accents.
+    # Multi-term search (AND), case- and accent-insensitive.
     param(
         [Parameter(Mandatory)]$ScriptInfo,
         [string]$Filter

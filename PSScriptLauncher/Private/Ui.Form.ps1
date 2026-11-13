@@ -1,7 +1,7 @@
-﻿# Formulaire de paramètres : création des lignes, lecture et écriture des valeurs.
+﻿# Parameter form: creating the rows, reading and writing the values.
 
 function New-HintedTextBox {
-    # TextBox avec texte indicatif (WPF n'a pas de propriété Placeholder).
+    # TextBox with a hint text (WPF has no Placeholder property).
     param([string]$Hint, [switch]$Multiline, [switch]$Monospace)
 
     $grid = [System.Windows.Controls.Grid]::new()
@@ -28,7 +28,7 @@ function New-HintedTextBox {
         $box.Tag = $hintBlock
     }
 
-    # Gestionnaire sans closure : $args[0] est le TextBox émetteur, son Tag porte l'indication
+    # Handler without closure: $args[0] is the source TextBox, its Tag holds the hint
     $box.Add_TextChanged({
             $changedBox = $args[0]
             if ($changedBox.Tag) {
@@ -40,8 +40,8 @@ function New-HintedTextBox {
 }
 
 function Get-BrowseMode {
-    # Boutons « Parcourir » à proposer pour un paramètre, d'après son type et son nom :
-    # 'File', 'Folder', 'Both' (*Path : on ne peut pas deviner) ou $null.
+    # "Browse" buttons to offer for a parameter, from its type and its name:
+    # 'File', 'Folder', 'Both' (*Path: cannot be guessed) or $null.
     param([Parameter(Mandatory)]$Parameter)
 
     if ($Parameter.Kind -notin 'Text', 'TextArray') { return $null }
@@ -58,11 +58,11 @@ function Get-BrowseMode {
 }
 
 function Select-FilePath {
-    # Boîte de dialogue « Ouvrir ». Un nom de fichier inexistant est accepté (fichier de sortie).
+    # "Open" dialog. A nonexistent file name is accepted (output file).
     param([string]$InitialDirectory, [switch]$Multiple)
 
     $dialog = [Microsoft.Win32.OpenFileDialog]::new()
-    $dialog.Title = 'Choisir un fichier'
+    $dialog.Title = Get-UiText 'form.dialog.pickFile'
     $dialog.CheckFileExists = $false
     $dialog.Multiselect = [bool]$Multiple
     if ($InitialDirectory -and (Test-Path -LiteralPath $InitialDirectory -PathType Container)) {
@@ -73,13 +73,13 @@ function Select-FilePath {
 }
 
 function Select-FolderPath {
-    # Boîte de dialogue de choix de dossier (Windows Forms : WPF n'en fournit pas en .NET Framework).
+    # Folder picker dialog (Windows Forms: WPF does not provide one in .NET Framework).
     param([string]$InitialDirectory)
 
     Add-Type -AssemblyName System.Windows.Forms
     $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
     try {
-        $dialog.Description = 'Choisir un dossier'
+        $dialog.Description = Get-UiText 'window.dialog.pickFolder'
         $dialog.ShowNewFolderButton = $true
         if ($InitialDirectory -and (Test-Path -LiteralPath $InitialDirectory -PathType Container)) {
             $dialog.SelectedPath = $InitialDirectory
@@ -91,12 +91,12 @@ function Select-FolderPath {
 }
 
 function Invoke-BrowseButton {
-    # Clic sur « Fichier... » ou « Dossier... » : le Tag du bouton désigne la zone de saisie cible.
+    # Click on "File..." or "Folder...": the button Tag designates the target input box.
     param([Parameter(Mandatory)]$Button)
 
     $target = $Button.Tag
     $box = $target.Box
-    # Dossier de départ : celui de la valeur déjà saisie, sinon celui du script
+    # Starting folder: that of the value already typed, otherwise that of the script
     $initial = $null
     $currentValue = @($box.Text -split '\r?\n' | Where-Object { $_.Trim() }) | Select-Object -Last 1
     if ($currentValue) {
@@ -115,7 +115,7 @@ function Invoke-BrowseButton {
     if ($selected.Count -eq 0) { return }
 
     if ($target.Multiple) {
-        # Tableau : les choix s'ajoutent aux lignes déjà saisies
+        # Array: the choices are added to the lines already typed
         $lines = @($box.Text -split '\r?\n' | Where-Object { $_.Trim() }) + $selected
         $box.Text = $lines -join [Environment]::NewLine
     }
@@ -125,7 +125,7 @@ function Invoke-BrowseButton {
 }
 
 function New-BrowsePanel {
-    # Rangée de boutons « Fichier... » / « Dossier... » associée à une zone de saisie.
+    # Row of "File..." / "Folder..." buttons attached to one input box.
     param(
         [Parameter(Mandatory)]$TextBox,
         [Parameter(Mandatory)][ValidateSet('File', 'Folder', 'Both')][string]$Mode,
@@ -135,16 +135,17 @@ function New-BrowsePanel {
     $panel = [System.Windows.Controls.StackPanel]::new()
     $panel.Orientation = [System.Windows.Controls.Orientation]::Horizontal
     $panel.Margin = [System.Windows.Thickness]::new(0, 4, 0, 0)
+    $folderLabel = Get-UiText 'window.button.folder'
     $labels = [System.Collections.Generic.List[string]]::new()
-    if ($Mode -in 'File', 'Both') { $labels.Add('Fichier...') }
-    if ($Mode -in 'Folder', 'Both') { $labels.Add('Dossier...') }
+    if ($Mode -in 'File', 'Both') { $labels.Add((Get-UiText 'form.button.file')) }
+    if ($Mode -in 'Folder', 'Both') { $labels.Add($folderLabel) }
     foreach ($label in $labels) {
         $button = [System.Windows.Controls.Button]::new()
         $button.Content = $label
         $button.Padding = [System.Windows.Thickness]::new(8, 1, 8, 1)
         $button.Margin = [System.Windows.Thickness]::new(0, 0, 6, 0)
-        $button.Tag = [pscustomobject]@{ Box = $TextBox; Folder = ($label -eq 'Dossier...'); Multiple = [bool]$Multiple }
-        # Gestionnaire sans closure : $args[0] est le bouton, son Tag porte la cible
+        $button.Tag = [pscustomobject]@{ Box = $TextBox; Folder = ($label -eq $folderLabel); Multiple = [bool]$Multiple }
+        # Handler without closure: $args[0] is the button, its Tag holds the target
         $button.Add_Click({
                 $clicked = $args[0]
                 Invoke-UiAction { Invoke-BrowseButton -Button $clicked }
@@ -155,7 +156,7 @@ function New-BrowsePanel {
 }
 
 function New-ParameterRow {
-    # Bloc de saisie d'un paramètre : en-tête, contrôle adapté au type, description.
+    # Input block for one parameter: header, control suited to the type, description.
     param([Parameter(Mandatory)]$Parameter)
 
     $panel = [System.Windows.Controls.StackPanel]::new()
@@ -184,23 +185,23 @@ function New-ParameterRow {
     switch ($Parameter.Kind) {
         { $_ -in 'Switch', 'SecureString' } {
             $control = [System.Windows.Controls.CheckBox]::new()
-            $control.Content = if ($Parameter.Kind -eq 'Switch') { 'Activer' }
-            else { 'Saisir au lancement (Read-Host -AsSecureString)' }
+            $control.Content = if ($Parameter.Kind -eq 'Switch') { Get-UiText 'form.check.enable' }
+            else { Get-UiText 'form.check.secureStringPrompt' }
             $control.Add_Click({ Invoke-UiAction { Update-CommandPreview } })
             [void]$panel.Children.Add($control)
         }
         'Credential' {
             $control = [System.Windows.Controls.CheckBox]::new()
-            $control.Content = 'Demander au lancement (Get-Credential)'
+            $control.Content = Get-UiText 'form.check.credentialPrompt'
             $control.Add_Click({ Invoke-UiAction { Update-CommandPreview } })
             $line = [System.Windows.Controls.StackPanel]::new()
             $line.Orientation = [System.Windows.Controls.Orientation]::Horizontal
             $line.Margin = [System.Windows.Thickness]::new(22, 5, 0, 0)
             $label = [System.Windows.Controls.TextBlock]::new()
-            $label.Text = 'Utilisateur (facultatif) :'
+            $label.Text = Get-UiText 'form.label.userName'
             $label.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
             $label.Margin = [System.Windows.Thickness]::new(0, 0, 6, 0)
-            $hinted = New-HintedTextBox -Hint 'DOMAINE\utilisateur'
+            $hinted = New-HintedTextBox -Hint (Get-UiText 'form.hint.domainUser')
             $hinted.Container.Width = 240
             $userBox = $hinted.TextBox
             [void]$line.Children.Add($label)
@@ -212,7 +213,7 @@ function New-ParameterRow {
             $control = [System.Windows.Controls.ComboBox]::new()
             $control.MinWidth = 220
             $control.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Left
-            [void]$control.Items.Add('(non renseigné)')
+            [void]$control.Items.Add((Get-UiText 'form.choice.unset'))
             $choices = if ($Parameter.Kind -eq 'Bool') { @('$true', '$false') } else { $Parameter.ValidValues }
             foreach ($choice in $choices) { [void]$control.Items.Add([string]$choice) }
             $control.SelectedIndex = 0
@@ -223,7 +224,7 @@ function New-ParameterRow {
             $control = [System.Windows.Controls.WrapPanel]::new()
             foreach ($choice in $Parameter.ValidValues) {
                 $box = [System.Windows.Controls.CheckBox]::new()
-                # Libellé dans un TextBlock : en texte brut, un « _ » serait pris pour un raccourci clavier
+                # Label inside a TextBlock: in plain text, an "_" would be taken as a keyboard shortcut
                 $label = [System.Windows.Controls.TextBlock]::new()
                 $label.Text = [string]$choice
                 $box.Content = $label
@@ -236,12 +237,17 @@ function New-ParameterRow {
         }
         default {
             $hint = switch ($Parameter.Kind) {
-                'TextArray' { 'Une valeur par ligne' }
-                'Number' { if ($Parameter.IsInteger) { 'Nombre entier' } else { 'Nombre (3,5 ou 3.5)' } }
-                'Date' { 'Date, ex. ' + (Get-Date).ToString('g') }
+                'TextArray' { Get-UiText 'form.hint.textArray' }
+                'Number' {
+                    if ($Parameter.IsInteger) { Get-UiText 'form.hint.integer' }
+                    else { Get-UiText 'form.hint.number' }
+                }
+                'Date' {
+                    Get-UiText 'form.hint.date' -Arguments @((Get-Date).ToString('g'))
+                }
                 'Expression' {
-                    if ($Parameter.Type -eq [scriptblock]) { 'Expression, ex. { $_.Enabled }' }
-                    else { 'Expression, ex. @{ Cle = ''Valeur'' }' }
+                    if ($Parameter.Type -eq [scriptblock]) { Get-UiText 'form.hint.expressionBlock' }
+                    else { Get-UiText 'form.hint.expressionTable' }
                 }
                 default { '' }
             }
@@ -268,8 +274,12 @@ function New-ParameterRow {
         [void]$panel.Children.Add($description)
     }
     $details = [System.Collections.Generic.List[string]]::new()
-    if ($Parameter.DefaultValue) { $details.Add('Défaut : ' + $Parameter.DefaultValue) }
-    if ($Parameter.Aliases.Count -gt 0) { $details.Add('Alias : ' + ($Parameter.Aliases -join ', ')) }
+    if ($Parameter.DefaultValue) {
+        $details.Add((Get-UiText 'form.label.default' -Arguments @($Parameter.DefaultValue)))
+    }
+    if ($Parameter.Aliases.Count -gt 0) {
+        $details.Add((Get-UiText 'form.label.alias' -Arguments @(($Parameter.Aliases -join ', '))))
+    }
     foreach ($constraint in @(Format-ParameterValidation -Validation $Parameter.Validation)) { $details.Add($constraint) }
     if ($details.Count -gt 0) {
         $meta = [System.Windows.Controls.TextBlock]::new()
@@ -292,7 +302,7 @@ function New-ParameterRow {
 }
 
 function Get-RowValue {
-    # Valeur saisie dans une ligne du formulaire, sous la forme attendue par ConvertTo-ParameterArgument.
+    # Value typed in a form row, in the form expected by ConvertTo-ParameterArgument.
     param([Parameter(Mandatory)]$Row)
 
     $control = $Row.Control
@@ -312,7 +322,7 @@ function Get-RowValue {
         }
         'MultiChoice' {
             $checked = @($control.Children | Where-Object { $_.IsChecked -eq $true } | ForEach-Object { [string]$_.Tag })
-            return , [string[]]$checked      # virgule : le tableau est renvoyé entier, même vide
+            return , [string[]]$checked      # comma: the array is returned whole, even when empty
         }
         'TextArray' { return , [string[]]@($control.Text -split '\r?\n') }
         default { return $control.Text }
@@ -320,8 +330,8 @@ function Get-RowValue {
 }
 
 function Set-RowValue {
-    # Écrit une valeur dans une ligne du formulaire (inverse de Get-RowValue). $null vide la ligne.
-    # Une valeur qui ne convient plus (choix disparu du ValidateSet...) est ignorée sans erreur.
+    # Writes a value into a form row (inverse of Get-RowValue). $null clears the row.
+    # A value that no longer fits (choice removed from the ValidateSet...) is ignored, without error.
     param([Parameter(Mandatory)]$Row, $Value)
 
     $control = $Row.Control
@@ -362,8 +372,8 @@ function Set-RowValue {
 }
 
 function Set-RowFromExample {
-    # Remplit une ligne avec un argument lu dans un .EXAMPLE. Renvoie $false si la valeur de
-    # l'exemple n'est pas littérale (variable, sous-expression) et ne peut pas être saisie telle quelle.
+    # Fills a row with an argument read from a .EXAMPLE. Returns $false if the example value is not
+    # literal (variable, subexpression) and cannot be typed as is.
     param([Parameter(Mandatory)]$Row, [Parameter(Mandatory)]$Argument)
 
     switch ($Row.Parameter.Kind) {
@@ -372,7 +382,7 @@ function Set-RowFromExample {
             return $true
         }
         { $_ -in 'Credential', 'SecureString' } {
-            # L'exemple passe un objet ($cred, (Get-Credential)...) : on le demandera au lancement
+            # The example passes an object ($cred, (Get-Credential)...): it will be asked at launch
             Set-RowValue -Row $Row -Value $true
             return $true
         }
@@ -387,7 +397,7 @@ function Set-RowFromExample {
 }
 
 function Update-ParameterVisibility {
-    # Affiche les paramètres du jeu sélectionné et leur caractère obligatoire dans ce jeu.
+    # Shows the parameters of the selected set and whether they are mandatory in that set.
     foreach ($row in $script:State.Rows) {
         $mandatory = Get-ParameterSetMembership -Parameter $row.Parameter -ParameterSet $script:State.CurrentSet
         if ($null -eq $mandatory) {
@@ -402,7 +412,7 @@ function Update-ParameterVisibility {
 }
 
 function Update-CommandPreview {
-    # Reconstruit la commande à partir du formulaire et signale les valeurs invalides.
+    # Rebuilds the command from the form and reports the invalid values.
     if ($script:State.Loading -or $null -eq $script:State.Current) { return }
 
     $values = @{}

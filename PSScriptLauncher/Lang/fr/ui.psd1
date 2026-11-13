@@ -1,0 +1,27 @@
+﻿# Libellés fixes : boutons, onglets, étiquettes. Chargé avec les autres catalogues de la langue.
+@{
+    'window.title'              = 'Lanceur de scripts'
+    'window.language.tooltip'   = "Langue de l'interface"
+    'window.search.hint'        = 'Rechercher (nom, dossier, synopsis)   Ctrl+F'
+    'window.button.refresh'     = 'Actualiser (F5)'
+    'window.button.folder'      = 'Dossier...'
+    'window.button.folder.tip'  = 'Changer le dossier analysé (Ctrl+O)'
+    'window.favorite.on'        = '★ Favori'
+    'window.favorite.off'       = '☆ Favori'
+    'window.empty.title'        = 'Sélectionnez un script'
+    'window.tab.parameters'     = 'Paramètres'
+    'window.tab.help'           = 'Aide'
+    'window.label.parameterset' = 'Jeu de paramètres :'
+    'window.label.example'      = 'Exemple :'
+    'window.label.extra'        = 'Arguments supplémentaires (ajoutés tels quels)'
+    'window.label.command'      = 'Commande'
+    'window.label.engine'       = 'Moteur :'
+    'window.check.noexit'       = 'Garder la console ouverte'
+    'window.check.noprofile'    = 'Sans profil'
+    'window.check.elevate'      = 'En administrateur'
+    'window.check.whatif'       = '-WhatIf (simulation, sans modification)'
+    'window.button.reset'       = 'Effacer la saisie'
+    'window.button.locate'      = 'Emplacement'
+    'window.button.copy'        = 'Copier'
+    'window.button.run'         = 'Lancer'
+}

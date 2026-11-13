@@ -1,6 +1,6 @@
 ﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Lanceur de scripts" Width="1180" Height="780" MinWidth="900" MinHeight="540"
+        Title="Script launcher" Width="1180" Height="780" MinWidth="900" MinHeight="540"
         WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="13">
   <Grid Margin="10">
     <Grid.ColumnDefinitions>
@@ -12,17 +12,17 @@
     <DockPanel Grid.Column="0">
       <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
         <TextBox x:Name="SearchBox" Padding="6,4" VerticalContentAlignment="Center"/>
-        <TextBlock x:Name="SearchHint" Text="Rechercher (nom, dossier, synopsis)   Ctrl+F" Foreground="Gray"
+        <TextBlock x:Name="SearchHint" Text="Search (name, folder, synopsis)   Ctrl+F" Foreground="Gray"
                    Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
       </Grid>
       <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-        <Button x:Name="FolderButton" DockPanel.Dock="Right" Content="Dossier..." Padding="10,3" Margin="6,0,0,0"
-                ToolTip="Changer le dossier analysé (Ctrl+O)"/>
+        <Button x:Name="FolderButton" DockPanel.Dock="Right" Content="Folder..." Padding="10,3" Margin="6,0,0,0"
+                ToolTip="Change the folder being analyzed (Ctrl+O)"/>
         <TextBlock x:Name="RootText" VerticalAlignment="Center" Foreground="Gray"
                    TextTrimming="CharacterEllipsis"/>
       </DockPanel>
       <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
-        <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Actualiser (F5)" Padding="10,3" Margin="6,0,0,0"/>
+        <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Refresh (F5)" Padding="10,3" Margin="6,0,0,0"/>
         <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
       </DockPanel>
       <ProgressBar x:Name="ScanProgress" DockPanel.Dock="Bottom" Height="4" Margin="0,6,0,0" Visibility="Collapsed"/>
@@ -41,9 +41,11 @@
 
       <StackPanel Grid.Row="0" Margin="2,0,0,8">
         <DockPanel>
-          <Button x:Name="FavoriteButton" DockPanel.Dock="Right" Content="☆ Favori" Padding="10,3"
+          <Button x:Name="FavoriteButton" DockPanel.Dock="Right" Content="☆ Favorite" Padding="10,3"
                   VerticalAlignment="Center" IsEnabled="False"/>
-          <TextBlock x:Name="ScriptTitle" Text="Sélectionnez un script" FontSize="20" FontWeight="SemiBold"
+          <ComboBox x:Name="LanguageCombo" DockPanel.Dock="Right" MinWidth="104" Margin="0,0,8,0"
+                    VerticalAlignment="Center" ToolTip="Interface language"/>
+          <TextBlock x:Name="ScriptTitle" Text="Select a script" FontSize="20" FontWeight="SemiBold"
                      TextTrimming="CharacterEllipsis"/>
         </DockPanel>
         <TextBlock x:Name="ScriptPath" Foreground="Gray" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
@@ -55,7 +57,7 @@
       </StackPanel>
 
       <TabControl x:Name="DetailTabs" Grid.Row="1">
-        <TabItem Header="Paramètres">
+        <TabItem x:Name="ParamTab" Header="Parameters">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="10,10,16,10">
               <Border x:Name="DescriptionPanel" BorderBrush="LightGray" BorderThickness="0,0,0,1"
@@ -63,11 +65,11 @@
                 <TextBlock x:Name="ScriptDescription" TextWrapping="Wrap" Foreground="DimGray"/>
               </Border>
               <StackPanel x:Name="SetPanel" Orientation="Horizontal" Margin="0,0,0,14" Visibility="Collapsed">
-                <TextBlock Text="Jeu de paramètres :" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock x:Name="SetLabel" Text="Parameter set:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox x:Name="SetCombo" MinWidth="220"/>
               </StackPanel>
               <StackPanel x:Name="ExamplePanel" Orientation="Horizontal" Margin="0,0,0,14" Visibility="Collapsed">
-                <TextBlock Text="Exemple :" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock x:Name="ExampleLabel" Text="Example:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox x:Name="ExampleCombo" MinWidth="220" MaxWidth="560"/>
               </StackPanel>
               <StackPanel x:Name="ParamPanel"/>
@@ -75,24 +77,25 @@
                 <StackPanel>
                   <WrapPanel>
                     <CheckBox x:Name="VerboseCheck" Content="-Verbose" Margin="0,0,18,8" Visibility="Collapsed"/>
-                    <CheckBox x:Name="WhatIfCheck" Content="-WhatIf (simulation, sans modification)"
+                    <CheckBox x:Name="WhatIfCheck" Content="-WhatIf (simulate, no change)"
                               Margin="0,0,18,8" Visibility="Collapsed"/>
                   </WrapPanel>
-                  <TextBlock Text="Arguments supplémentaires (ajoutés tels quels)" Foreground="Gray" Margin="0,0,0,3"/>
+                  <TextBlock x:Name="ExtraArgsLabel" Text="Extra arguments (added as typed)" Foreground="Gray"
+                             Margin="0,0,0,3"/>
                   <TextBox x:Name="ExtraArgsBox" FontFamily="Consolas" Padding="4,3"/>
                 </StackPanel>
               </Border>
             </StackPanel>
           </ScrollViewer>
         </TabItem>
-        <TabItem Header="Aide">
+        <TabItem x:Name="HelpTab" Header="Help">
           <TextBox x:Name="HelpText" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" BorderThickness="0"
                    Padding="10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"/>
         </TabItem>
       </TabControl>
 
       <StackPanel Grid.Row="2" Margin="0,10,0,0">
-        <TextBlock Text="Commande" FontWeight="SemiBold" Margin="0,0,0,3"/>
+        <TextBlock x:Name="CommandLabel" Text="Command" FontWeight="SemiBold" Margin="0,0,0,3"/>
         <TextBox x:Name="CommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" Padding="6,4"
                  MinHeight="46" MaxHeight="120" VerticalScrollBarVisibility="Auto"/>
         <Grid Margin="0,8,0,0">
@@ -101,19 +104,19 @@
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
           <WrapPanel Grid.Column="0" VerticalAlignment="Center">
-            <TextBlock Text="Moteur :" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBlock x:Name="EngineLabel" Text="Engine:" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <ComboBox x:Name="EngineCombo" MinWidth="190" Margin="0,2,14,2" VerticalAlignment="Center"/>
-            <CheckBox x:Name="NoExitCheck" Content="Garder la console ouverte" IsChecked="True"
+            <CheckBox x:Name="NoExitCheck" Content="Keep the console open" IsChecked="True"
                       VerticalAlignment="Center" Margin="0,2,14,2"/>
-            <CheckBox x:Name="NoProfileCheck" Content="Sans profil" IsChecked="True"
+            <CheckBox x:Name="NoProfileCheck" Content="No profile" IsChecked="True"
                       VerticalAlignment="Center" Margin="0,2,14,2"/>
-            <CheckBox x:Name="ElevateCheck" Content="En administrateur" VerticalAlignment="Center" Margin="0,2,14,2"/>
+            <CheckBox x:Name="ElevateCheck" Content="Run as administrator" VerticalAlignment="Center" Margin="0,2,14,2"/>
           </WrapPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button x:Name="ResetButton" Content="Effacer la saisie" Padding="10,4" Margin="0,0,6,0" IsEnabled="False"/>
-            <Button x:Name="LocateButton" Content="Emplacement" Padding="10,4" Margin="0,0,6,0" IsEnabled="False"/>
-            <Button x:Name="CopyButton" Content="Copier" Padding="10,4" Margin="0,0,6,0" IsEnabled="False"/>
-            <Button x:Name="RunButton" Content="Lancer" Padding="22,4" FontWeight="SemiBold" IsEnabled="False"/>
+            <Button x:Name="ResetButton" Content="Clear input" Padding="10,4" Margin="0,0,6,0" IsEnabled="False"/>
+            <Button x:Name="LocateButton" Content="Show location" Padding="10,4" Margin="0,0,6,0" IsEnabled="False"/>
+            <Button x:Name="CopyButton" Content="Copy" Padding="10,4" Margin="0,0,6,0" IsEnabled="False"/>
+            <Button x:Name="RunButton" Content="Run" Padding="22,4" FontWeight="SemiBold" IsEnabled="False"/>
           </StackPanel>
         </Grid>
       </StackPanel>

@@ -1,8 +1,8 @@
-﻿# Réglages PSScriptAnalyzer du module : Invoke-ScriptAnalyzer -Path . -Recurse -Settings .\PSScriptAnalyzerSettings.psd1
+﻿# PSScriptAnalyzer settings of the module: Invoke-ScriptAnalyzer -Path . -Recurse -Settings .\PSScriptAnalyzerSettings.psd1
 @{
     ExcludeRules = @(
-        # Les fonctions internes en Set-/New-/Start-/Update-/Remove- ne modifient que la fenêtre,
-        # des objets en mémoire ou le fichier de préférences de l'utilisateur : -WhatIf n'y a pas de sens.
+        # Internal Set-/New-/Start-/Update-/Remove- functions only change the window, in-memory
+        # objects or the user preference file: -WhatIf makes no sense there.
         'PSUseShouldProcessForStateChangingFunctions'
     )
 }

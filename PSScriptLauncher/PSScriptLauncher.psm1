@@ -1,14 +1,14 @@
 ﻿#Requires -Version 5.1
 
-# Module du lanceur de scripts. Une seule commande publique : Show-PSScriptLauncher.
-# Les fichiers de Private ne contiennent que des fonctions (et les réglages) ; l'ordre de
-# chargement ne compte que pour Settings.ps1, qui doit venir en premier.
+# Script launcher module. One public command: Show-PSScriptLauncher.
+# Files in Private only hold functions (and settings); loading order matters only for
+# Settings.ps1 and Text.ps1, which must come first.
 
-# Toute erreur de cmdlet est bloquante dans le module : elle est interceptée et affichée, au
-# lieu de passer inaperçue dans une console que le raccourci conseillé masque.
+# Any cmdlet error is terminating inside the module: it is caught and displayed, instead of
+# going unnoticed in a console that the recommended shortcut hides.
 $ErrorActionPreference = 'Stop'
 
-$privateFiles = 'Settings', 'Analysis', 'Command', 'HelpText', 'UserState', 'Ui.Form', 'Ui.Window'
+$privateFiles = 'Settings', 'Text', 'Analysis', 'Command', 'HelpText', 'UserState', 'Ui.Form', 'Ui.Window'
 foreach ($name in $privateFiles) {
     . (Join-Path (Join-Path $PSScriptRoot 'Private') "$name.ps1")
 }
@@ -16,35 +16,47 @@ foreach ($name in $privateFiles) {
 function Show-PSScriptLauncher {
     <#
     .SYNOPSIS
-        Ouvre le lanceur graphique de scripts PowerShell sur un dossier.
+        Opens the graphical launcher for the PowerShell scripts of a folder.
 
     .DESCRIPTION
-        Parcourt le dossier et ses sous-dossiers, lit le bloc param() et l'aide de chaque script
-        sans l'exécuter, et affiche une fenêtre qui permet de renseigner les paramètres et de
-        lancer le script choisi dans une nouvelle console.
+        Scans the folder and its subfolders, reads the param() block and the comment-based help of
+        each script without running it, and shows a window where the parameters can be filled in
+        and the chosen script launched in a new console.
 
-        Les favoris, les scripts récents et la dernière saisie de chaque script sont propres à
-        l'utilisateur connecté : ils sont enregistrés dans son profil (%LOCALAPPDATA%), jamais
-        dans le dossier des scripts.
+        Favorites, recent scripts and the last input of each script belong to the logged-on user:
+        they are stored in the profile (%LOCALAPPDATA%), never in the scripts folder.
+
+        The interface is available in several languages; the catalog of strings lives in
+        Lang\<code>. The language can be changed from the window, and is remembered.
 
     .PARAMETER Path
-        Dossier racine à parcourir. Par défaut : le dossier courant.
+        Root folder to scan. Default: the current folder.
 
     .PARAMETER ExcludePattern
-        Motifs (caractères génériques) appliqués au chemin relatif et au nom des scripts à masquer.
+        Wildcard patterns applied to the relative path and to the script name to hide.
 
     .PARAMETER StatePath
-        Fichier d'état de l'utilisateur. Par défaut :
-        %LOCALAPPDATA%\PSScriptLauncher\state.json.
+        User state file. Default: %LOCALAPPDATA%\PSScriptLauncher\state.json.
+
+    .PARAMETER Language
+        Interface language code ('en', 'fr'). Default: the saved preference, then the Windows UI
+        language.
 
     .EXAMPLE
         Show-PSScriptLauncher -Path C:\Scripts
+
+        Opens the launcher on C:\Scripts.
+
+    .EXAMPLE
+        Show-PSScriptLauncher -Path C:\Scripts -Language fr
+
+        Opens the launcher in French.
 
     .INPUTS
         None.
 
     .OUTPUTS
-        None. La commande rend la main à la fermeture de la fenêtre.
+        None. The command returns when the window is closed.
     #>
     [CmdletBinding()]
     param(
@@ -55,12 +67,17 @@ function Show-PSScriptLauncher {
         [ValidateNotNull()]
         [string[]]$ExcludePattern = @('*.Tests.ps1'),
 
-        [string]$StatePath
+        [string]$StatePath,
+
+        [string]$Language
     )
 
     try {
         Assert-LauncherPrerequisite
-        if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "Dossier introuvable : $Path" }
+        Initialize-UiText -Language $Language -StatePath $StatePath
+        if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+            throw (Get-UiText 'window.error.folderNotFound' -Arguments @($Path))
+        }
         $root = (Resolve-Path -LiteralPath $Path).ProviderPath
         $script:Window = $null
         $script:State = New-LauncherState -Root $root -ExcludePattern $ExcludePattern -StatePath $StatePath
@@ -68,14 +85,14 @@ function Show-PSScriptLauncher {
         [void]$script:Window.ShowDialog()
     }
     catch {
-        $message = "Le lanceur n'a pas pu démarrer : $($_.Exception.Message)"
-        # Message visible même si la console est masquée (raccourci -WindowStyle Hidden)
+        $message = Get-UiText 'window.error.startup' -Arguments @($_.Exception.Message)
+        # Message visible even if the console is hidden (shortcut -WindowStyle Hidden)
         try {
             Add-Type -AssemblyName PresentationFramework
             $script:Window = $null
             Show-ErrorDialog -Message $message
         }
-        catch { Write-Warning 'Boîte de dialogue WPF indisponible.' }
+        catch { Write-Warning 'WPF dialog unavailable.' }
         throw
     }
     finally {

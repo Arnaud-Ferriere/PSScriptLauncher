@@ -1,104 +1,119 @@
-# ScriptLauncher
+# PSScriptLauncher
 
-Interface graphique pour lancer les scripts PowerShell d'un dossier, à la manière de
-`Show-Command`, en s'appuyant sur ce qui existe déjà dans chaque script : le bloc `param()`
-et l'aide comment-based. Aucune configuration à écrire, aucun serveur à installer.
+A graphical launcher for the PowerShell scripts of a folder, in the spirit of `Show-Command`,
+built on what each script already contains: its `param()` block and its comment-based help.
+Nothing to configure, no server to install.
 
-<!-- Capture d'écran : docs/screenshot.png -->
+![PSScriptLauncher](Docs/screenshot-parameters.png)
 
-## Fonctionnalités
+## Features
 
-- **Inventaire automatique** du dossier et de ses sous-dossiers, en arrière-plan. Les scripts
-  sont lus par analyse syntaxique (AST) : **ils ne sont jamais exécutés pendant la lecture**.
-- **Formulaire généré** depuis `param()` :
-  - jeux de paramètres, champs obligatoires, alias, valeurs par défaut ;
-  - `ValidateSet` et enums en listes, choix multiples pour les tableaux ;
-  - `ValidateRange` et `ValidatePattern` vérifiés à la saisie ;
-  - boutons « Fichier... » / « Dossier... » pour les paramètres `*Path`, `*File`, `*Folder` ;
-  - `PSCredential` et `SecureString` demandés au lancement, jamais transmis en clair.
-- **Aide intégrée** : synopsis et description en tête, aide complète façon `Get-Help -Full`.
-  Les descriptions écrites en commentaire dans `param()` sont reprises, comme le fait `Get-Help`.
-- **Remplissage depuis un `.EXAMPLE`** : un clic sur un exemple de l'aide remplit le formulaire.
-- **Favoris, scripts récents et dernière saisie** de chaque script, propres à l'utilisateur.
-- **Recherche** par nom, dossier ou synopsis, insensible à la casse et aux accents.
-- **Lancement dans une nouvelle console** (Windows PowerShell 5.1 ou PowerShell 7, choisi
-  d'après `#Requires`), en administrateur si besoin. La commande générée peut aussi être copiée.
-- **Diagnostic de l'aide** : un bloc d'aide que `Get-Help` ignore pour une question de mise en
-  forme (ligne vide manquante après `#Requires`, aide placée après `using`...) est quand même
-  affiché, avec un avertissement qui indique la correction.
+- **Automatic inventory** of the folder and its subfolders, in the background. Scripts are read by
+  syntax analysis (AST): **they are never executed while being read**.
+- **Form generated** from `param()`:
+  - parameter sets, mandatory fields, aliases, default values;
+  - `ValidateSet` and enums as lists, multiple choice for arrays;
+  - `ValidateRange` and `ValidatePattern` checked while typing;
+  - "File..." / "Folder..." buttons for `*Path`, `*File`, `*Folder` parameters;
+  - `PSCredential` and `SecureString` asked for at launch time, never passed in clear text.
+- **Built-in help**: synopsis and description at the top, full help in the `Get-Help -Full` style.
+  Descriptions written as comments inside `param()` are reused, exactly as `Get-Help` does.
+- **Fill from an `.EXAMPLE`**: a click on one of the help examples fills the form.
+- **Favorites, recent scripts and last input** of each script, kept per user.
+- **Search** by name, folder or synopsis, ignoring case and accents.
+- **Launch in a new console** (Windows PowerShell 5.1 or PowerShell 7, chosen from `#Requires`),
+  elevated when needed. The generated command can also be copied.
+- **Help diagnostics**: a help block that `Get-Help` ignores because of a formatting detail (missing
+  blank line after `#Requires`, help placed after `using`...) is still displayed, with a warning
+  that tells you what to fix.
 
-## Prérequis
+## Requirements
 
-- Windows, avec Windows PowerShell 5.1 ou PowerShell 7+.
-- Session STA (le défaut des deux consoles) et mode de langage `FullLanguage` (WPF n'est pas
-  utilisable en `ConstrainedLanguage`, par exemple sous une stratégie AppLocker ou WDAC stricte).
+- Windows, with Windows PowerShell 5.1 or PowerShell 7+.
+- An STA session (the default in both consoles) and `FullLanguage` language mode (WPF cannot be used
+  in `ConstrainedLanguage`, for example under a strict AppLocker or WDAC policy).
 
 ## Installation
 
-1. Copier `Show-ScriptLauncher.ps1` et le dossier `ScriptLauncher` à la racine du dossier de
-   scripts à présenter.
-2. Si les fichiers viennent d'un téléchargement, les débloquer :
+1. Copy `Show-PSScriptLauncher.ps1` and the `PSScriptLauncher` folder to the root of the script
+   folder you want to present.
+2. If the files come from a download, unblock them:
 
    ```powershell
    Get-ChildItem -Recurse -File | Unblock-File
    ```
 
-3. Si l'exécution de scripts est désactivée (stratégie `Restricted`, le défaut sur un poste
-   client), autoriser au moins la session :
+3. If script execution is disabled (`Restricted` policy, the default on a client machine), allow at
+   least the session:
 
    ```powershell
-   powershell.exe -ExecutionPolicy Bypass -File .\Show-ScriptLauncher.ps1
+   powershell.exe -ExecutionPolicy Bypass -File .\Show-PSScriptLauncher.ps1
    ```
 
-   Pour un usage durable : `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+   For a permanent change: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
-## Utilisation
+## Usage
 
 ```powershell
-.\Show-ScriptLauncher.ps1                                  # dossier du lanceur
-.\Show-ScriptLauncher.ps1 -Path D:\Scripts                 # autre dossier
-.\Show-ScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*'
+.\Show-PSScriptLauncher.ps1                                  # the launcher's own folder
+.\Show-PSScriptLauncher.ps1 -Path D:\Scripts                 # another folder
+.\Show-PSScriptLauncher.ps1 -Path D:\Scripts -Language fr     # French interface
+.\Show-PSScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*'
 ```
 
-Raccourci conseillé, qui masque la console du lanceur :
+The analyzed folder is the launcher's own, or the one given to `-Path`. It is shown under the
+search box and can be changed while the window is open, without restarting: **Folder...** button
+or `Ctrl+O`.
+
+A shortcut is recommended, as it hides the launcher's console:
 
 ```text
-powershell.exe -NoProfile -WindowStyle Hidden -File "<dossier>\Show-ScriptLauncher.ps1"
+powershell.exe -NoProfile -WindowStyle Hidden -File "<folder>\Show-PSScriptLauncher.ps1"
 ```
 
-Raccourcis clavier : `Ctrl+F` (recherche), `F5` (actualiser), `Ctrl+Entrée` (lancer).
+Keyboard shortcuts: `Ctrl+O` (folder), `Ctrl+F` (search), `F5` (refresh), `Ctrl+Enter` (run).
 
-## Données enregistrées
+## Languages
 
-Les favoris, les scripts récents et la dernière saisie lancée de chaque script sont écrits dans
-`%LOCALAPPDATA%\ScriptLauncher\state.json`, c'est-à-dire dans le profil de l'utilisateur
-connecté. Rien n'est écrit dans le dossier des scripts : sur un dossier partagé, chacun garde
-ses propres préférences.
+The interface is available in English and French. It follows the Windows UI language on first
+run, can be changed at any time from the selector at the top right of the window (the choice is
+remembered), or forced with `-Language en|fr`.
 
-Ne sont jamais conservés : les mots de passe et identifiants (`PSCredential`, `SecureString`),
-ni les valeurs des paramètres dont le nom évoque un secret (`Password`, `Token`, `Secret`,
-`ApiKey`...).
+Every string lives in `PSScriptLauncher\Lang\<code>\*.psd1`, one catalog per language and per
+area (window, form, analysis, command, help). Adding a language means adding a folder: the
+catalog is loaded at startup and a missing key is reported in the tests.
 
-## Écrire des scripts qui s'affichent bien
+![French interface](Docs/screenshot-french.png)
 
-Le lanceur suit les règles de `Get-Help`. Quelques points qui font la différence :
+## Saved data
+
+Favorites, recent scripts and the last input run of each script are written to
+`%LOCALAPPDATA%\PSScriptLauncher\state.json`, that is, in the profile of the logged-on user.
+Nothing is written in the script folder: on a shared folder, everyone keeps their own preferences.
+
+Never stored: passwords and credentials (`PSCredential`, `SecureString`), nor the values of
+parameters whose name suggests a secret (`Password`, `Token`, `Secret`, `ApiKey`...).
+
+## Writing scripts that display well
+
+The launcher follows the `Get-Help` rules. A few points make the difference:
 
 ```powershell
 #Requires -Version 5.1
 
 <#
 .SYNOPSIS
-    Une phrase : elle apparaît dans l'arborescence et en tête du formulaire.
+    One sentence: it appears in the tree and at the top of the form.
 .DESCRIPTION
-    Le détail, affiché sous le synopsis.
+    The details, displayed under the synopsis.
 .PARAMETER UserPrincipalName
-    Décrit le paramètre (une ligne de commentaire juste avant le paramètre fonctionne aussi).
+    Describes the parameter (a comment line right before the parameter also works).
 .EXAMPLE
     .\Set-Something.ps1 -UserPrincipalName user@contoso.com -Level 3
 
-    Les exemples qui appellent le script peuvent remplir le formulaire en un clic.
+    Examples that call the script can fill the form in one click.
 #>
-[CmdletBinding(SupportsShouldProcess)]       # -WhatIf et -Verbose proposés dans le formulaire
+[CmdletBinding(SupportsShouldProcess)]       # -WhatIf and -Verbose offered in the form
 param(
     [Parameter(Mandatory)]
     [string]$UserPrincipalName,
@@ -111,61 +126,78 @@ param(
 )
 ```
 
-- Laisser **une ligne vide** entre `#Requires` (ou tout autre commentaire) et le bloc d'aide.
-- Placer le bloc d'aide **avant** les instructions `using`.
-- Si le script commence par une fonction, laisser **deux lignes vides** entre l'aide et la
-  fonction, sinon `Get-Help` attribue l'aide à la fonction.
+- Leave **a blank line** between `#Requires` (or any other comment) and the help block.
+- Place the help block **before** `using` statements.
+- If the script starts with a function, leave **two blank lines** between the help and the function,
+  otherwise `Get-Help` assigns the help to the function.
 
-## Développement
+## Development
 
 ```text
-Show-ScriptLauncher.ps1          point d'entrée
-ScriptLauncher/
-  ScriptLauncher.psd1 / .psm1    module (une commande publique : Show-ScriptLauncher)
-  MainWindow.xaml                fenêtre WPF
+Show-PSScriptLauncher.ps1         entry point
+PSScriptLauncher/
+  PSScriptLauncher.psd1 / .psm1  module (one public command: Show-PSScriptLauncher)
+  MainWindow.xaml                WPF window
   Private/
-    Settings.ps1                 réglages
-    Analysis.ps1                 lecture des scripts par AST (sans WPF)
-    Command.ps1                  conversion des valeurs, validation, lancement
-    HelpText.ps1                 mise en forme de l'aide
-    UserState.ps1                favoris, récents, saisies
-    Ui.Form.ps1 / Ui.Window.ps1  formulaire et fenêtre
-  Tests/                         tests Pester (hors interface)
+    Settings.ps1                 settings
+    Text.ps1                     interface language and string catalogs
+    Analysis.ps1                 AST reading of scripts (no WPF)
+    Command.ps1                  value conversion, validation, launching
+    HelpText.ps1                 help formatting
+    UserState.ps1                favorites, recents, last inputs
+    Ui.Form.ps1 / Ui.Window.ps1  form and window
+  Lang/
+    en/ fr/                      interface catalogs, one folder per language
+  Tests/                         Pester tests (no UI)
 ```
 
-Tests (Pester 5.2 ou plus récent ; Windows PowerShell 5.1 est livré avec Pester 3) :
+Tests (Pester 5.2 or later; Windows PowerShell 5.1 ships with Pester 3):
 
 ```powershell
 Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck
-Invoke-Pester -Path .\ScriptLauncher\Tests
+Invoke-Pester -Path .\PSScriptLauncher\Tests
 ```
 
-Analyse statique :
+Static analysis:
 
 ```powershell
-Invoke-ScriptAnalyzer -Path . -Recurse -Settings .\ScriptLauncher\PSScriptAnalyzerSettings.psd1
+Invoke-ScriptAnalyzer -Path . -Recurse -Settings .\PSScriptLauncher\PSScriptAnalyzerSettings.psd1
 ```
 
-Les fichiers sont en UTF-8 avec BOM et fins de ligne CRLF (`.gitattributes`), indispensable
-pour que Windows PowerShell 5.1 lise correctement les accents.
+Files are UTF-8 with BOM and CRLF line endings (`.gitattributes`), which Windows PowerShell 5.1
+needs to read accents correctly.
 
-## Limites connues
+## Screenshots
 
-- Les paramètres dynamiques (`DynamicParam`) ne sont pas affichés.
-- `ValidateLength`, `ValidateCount` et `ValidateScript` ne sont pas vérifiés dans le formulaire.
-- La dernière saisie retenue est celle du dernier **lancement**.
+Built-in help, formatted like `Get-Help -Full`:
 
-## Outils proches
+![Help tab](Docs/screenshot-help.png)
 
-- [`Show-Command`](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/show-command) :
-  intégré à PowerShell, une commande à la fois, sans navigation dans un dossier.
-- [ScriptRunner](https://www.scriptrunner.com/) et
-  [PowerShell Universal](https://ironmansoftware.com/powershell-universal) : plateformes web
-  avec serveur, délégation, droits et audit. Plus adaptées pour confier des scripts à des
-  utilisateurs non administrateurs.
-- [PSScriptMenuGui](https://github.com/dan-osull/PowerShell-Script-Menu-Gui) : menu de boutons
-  décrit dans un CSV, arguments fixes.
+Search by name, folder or synopsis (case- and accent-insensitive):
 
-## Licence
+![Search](Docs/screenshot-search.png)
+
+`Path`-style parameters get "File..." and "Folder..." buttons; `SupportsShouldProcess` scripts get a
+`-WhatIf` box:
+
+![Path parameter](Docs/screenshot-path-parameter.png)
+
+## Known limitations
+
+- Dynamic parameters (`DynamicParam`) are not displayed.
+- `ValidateLength`, `ValidateCount` and `ValidateScript` are not checked in the form.
+- The last input kept is the one from the last **run**.
+
+## Similar tools
+
+- [`Show-Command`](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/show-command):
+  built into PowerShell, one command at a time, no folder browsing.
+- [ScriptRunner](https://www.scriptrunner.com/) and
+  [PowerShell Universal](https://ironmansoftware.com/powershell-universal): web platforms with a
+  server, delegation, rights and auditing. Better suited for handing scripts to non-admin users.
+- [PSScriptMenuGui](https://github.com/dan-osull/PowerShell-Script-Menu-Gui): a button menu
+  described in a CSV, with fixed arguments.
+
+## License
 
 [MIT](LICENSE).

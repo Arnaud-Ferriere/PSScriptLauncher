@@ -1,36 +1,36 @@
-﻿# Fenêtre principale : arborescence, détail du script, lancement, événements.
+﻿# Main window: script tree, script details, launching, events.
 
 function Show-ErrorDialog {
-    # Boîte d'erreur modale, rattachée à la fenêtre du lanceur si elle existe.
+    # Modal error box, attached to the launcher window when one exists.
     param([Parameter(Mandatory)][string]$Message)
 
     $button = [System.Windows.MessageBoxButton]::OK
     $icon = [System.Windows.MessageBoxImage]::Error
     if ($script:Window) {
-        [void][System.Windows.MessageBox]::Show($script:Window, $Message, 'Lanceur de scripts', $button, $icon)
+        [void][System.Windows.MessageBox]::Show($script:Window, $Message, (Get-UiText 'window.title'), $button, $icon)
     }
     else {
-        [void][System.Windows.MessageBox]::Show($Message, 'Lanceur de scripts', $button, $icon)
+        [void][System.Windows.MessageBox]::Show($Message, (Get-UiText 'window.title'), $button, $icon)
     }
 }
 
 function Invoke-UiAction {
-    # Exécute le corps d'un gestionnaire d'événement : une erreur est affichée (avec la ligne du
-    # lanceur où elle s'est produite) au lieu de faire tomber la fenêtre.
+    # Runs the body of an event handler: an error is displayed (with the line of the
+    # launcher where it occurred) instead of bringing the window down.
     param([Parameter(Mandatory)][scriptblock]$Action)
 
     try { & $Action }
     catch {
-        # Message de l'erreur d'origine, sans les enveloppes « Exception calling ... »
+        # Message of the original error, without the "Exception calling ..." wrappers
         $message = $_.Exception.GetBaseException().Message
         $file = Split-Path -Leaf ([string]$_.InvocationInfo.ScriptName)
-        $origin = '{0}, ligne {1}' -f $file, $_.InvocationInfo.ScriptLineNumber
-        Show-ErrorDialog -Message "Erreur : $message$([Environment]::NewLine)($origin)"
+        $origin = '{0}, line {1}' -f $file, $_.InvocationInfo.ScriptLineNumber
+        Show-ErrorDialog -Message ((Get-UiText 'window.error.uiAction' -Arguments @($message)) + [Environment]::NewLine + '(' + $origin + ')')
     }
 }
 
 function Set-Status {
-    # Message de la barre d'état (repris en infobulle : le texte peut être tronqué).
+    # Status bar message (repeated as a tooltip: the text may be truncated).
     param([string]$Message)
 
     $script:Ui.StatusText.Text = $Message
@@ -38,7 +38,7 @@ function Set-Status {
 }
 
 function Set-OptionalText {
-    # Affecte le texte d'un TextBlock et le masque s'il est vide.
+    # Sets the text of a TextBlock and hides it when the text is empty.
     param([Parameter(Mandatory)]$Element, [string]$Text)
 
     $Element.Text = $Text
@@ -46,7 +46,7 @@ function Set-OptionalText {
 }
 
 function New-LauncherState {
-    # État de la fenêtre pour une session du lanceur.
+    # Window state for one launcher session.
     param(
         [Parameter(Mandatory)][string]$Root,
         [string[]]$ExcludePattern = @(),
@@ -66,6 +66,9 @@ function New-LauncherState {
         CurrentSet     = ''
         Rows           = @()
         LastCommand    = $null
+        ScanSeconds    = 0
+        ScanWarnings   = 0
+        ScanErrors     = 0
         Loading        = $false
         Loaded         = $false
         Engines        = @()
@@ -78,20 +81,20 @@ function New-LauncherState {
 }
 
 function Edit-UserState {
-    # Applique une modification à l'état de l'utilisateur et l'enregistre. L'état est relu juste
-    # avant, pour ne pas écraser ce qu'une autre fenêtre du lanceur aurait enregistré entre-temps.
-    # Un échec d'écriture n'interrompt rien : il est seulement signalé dans la barre d'état.
+    # Applies a change to the user state and saves it. The state is re-read just
+    # before, so as not to overwrite what another launcher window saved in the meantime.
+    # A failed write interrupts nothing: it is only reported in the status bar.
     param([Parameter(Mandatory)][scriptblock]$Change)
 
     $state = Read-UserState -Path $script:State.StatePath
     & $Change $state
     $script:State.UserState = $state
     try { Save-UserState -Path $script:State.StatePath -State $state }
-    catch { Set-Status "Préférences non enregistrées : $($_.Exception.Message)" }
+    catch { Set-Status (Get-UiText 'window.error.preferences' -Arguments @($_.Exception.Message)) }
 }
 
 function Get-TreeFolderNode {
-    # Nœud d'un dossier dans l'arborescence, créé à la demande avec ses dossiers parents.
+    # Folder node in the tree, created on demand along with its parent folders.
     param(
         [Parameter(Mandatory)][hashtable]$Cache,
         [Parameter(Mandatory)][string]$RelativeDirectory,
@@ -100,7 +103,7 @@ function Get-TreeFolderNode {
 
     if ($Cache.ContainsKey($RelativeDirectory)) { return $Cache[$RelativeDirectory] }
     $item = [System.Windows.Controls.TreeViewItem]::new()
-    # Gras sur l'en-tête seulement : appliqué au nœud, FontWeight s'hériterait dans les scripts
+    # Bold on the header only: applied to the node, FontWeight would be inherited by scripts
     $header = [System.Windows.Controls.TextBlock]::new()
     $header.Text = [System.IO.Path]::GetFileName($RelativeDirectory)
     $header.FontWeight = [System.Windows.FontWeights]::SemiBold
@@ -117,7 +120,7 @@ function Get-TreeFolderNode {
 }
 
 function New-ScriptTreeItem {
-    # Nœud d'un script : nom, couleur selon son état (avertissement, sans aide), infobulle.
+    # Script node: name, color according to its state (warning, no help), tooltip.
     param([Parameter(Mandatory)]$Entry, [switch]$ShowLocation)
 
     $item = [System.Windows.Controls.TreeViewItem]::new()
@@ -127,15 +130,15 @@ function New-ScriptTreeItem {
     elseif (-not $Entry.Synopsis) { $header.Foreground = [System.Windows.Media.Brushes]::Gray }
     $item.Header = $header
     $item.Tag = $Entry
-    $toolTip = if ($Entry.Synopsis) { $Entry.Synopsis } else { 'Aucune aide' }
+    $toolTip = if ($Entry.Synopsis) { $Entry.Synopsis } else { Get-UiText 'window.tree.noHelp' }
     if ($ShowLocation) { $toolTip = $Entry.RelativePath + [Environment]::NewLine + $toolTip }
     $item.ToolTip = $toolTip
     $item
 }
 
 function Add-PinnedSection {
-    # Section en tête d'arborescence (Favoris, Récents) : raccourcis vers des scripts de l'inventaire.
-    # Les chemins qui ne sont plus dans l'inventaire sont simplement ignorés.
+    # Section at the top of the tree (Favorites, Recents): shortcuts to inventory scripts.
+    # Paths that are no longer in the inventory are simply ignored.
     param(
         [Parameter(Mandatory)][string]$Title,
         [string[]]$Path = @(),
@@ -158,12 +161,12 @@ function Add-PinnedSection {
 }
 
 function Update-ScriptTree {
-    # Reconstruit l'arborescence à partir de l'inventaire, du filtre de recherche et des favoris.
+    # Rebuilds the tree from the inventory, the search filter and the favorites.
     $tree = $script:Ui.ScriptTree
     $filter = $script:Ui.SearchBox.Text
     $isFiltered = -not [string]::IsNullOrWhiteSpace($filter)
 
-    # Dossiers que l'utilisateur avait ouverts ou repliés : conservés d'une reconstruction à l'autre
+    # Folders the user had opened or collapsed: kept from one rebuild to the next
     $previousExpansion = @{}
     if (-not $isFiltered -and -not $script:State.TreeFiltered) {
         foreach ($key in $script:State.TreeFolders.Keys) {
@@ -180,15 +183,15 @@ function Update-ScriptTree {
         $scriptByPath = @{}
         foreach ($entry in $scripts) { $scriptByPath[$entry.Path.ToLowerInvariant()] = $entry }
         $userState = $script:State.UserState
-        Add-PinnedSection -Title '★ Favoris' -Path $userState.Favorites.ToArray() -ScriptByPath $scriptByPath -Sort
-        Add-PinnedSection -Title 'Récents' -Path $userState.Recents.ToArray() -ScriptByPath $scriptByPath
+        Add-PinnedSection -Title (Get-UiText 'window.section.favorites') -Path $userState.Favorites.ToArray() -ScriptByPath $scriptByPath -Sort
+        Add-PinnedSection -Title (Get-UiText 'window.section.recents') -Path $userState.Recents.ToArray() -ScriptByPath $scriptByPath
     }
 
-    # Dossiers d'abord, triés segment par segment, puis les scripts de chaque dossier
+    # Folders first, sorted segment by segment, then the scripts of each folder
     $directories = [string[]]@(
         $scripts | ForEach-Object { $_.RelativeDirectory } | Where-Object { $_ } | Select-Object -Unique)
     if ($directories.Count -gt 0) {
-        # Clé de tri : séparateur remplacé par U+0001, pour que « A\B » se classe avant « A-C »
+        # Sort key: separator replaced by U+0001, so that "A\B" sorts before "A-C"
         $keys = [string[]]@($directories | ForEach-Object { $_ -replace '[\\/]', [string][char]1 })
         [Array]::Sort($keys, $directories, [System.StringComparer]::OrdinalIgnoreCase)
         foreach ($directory in $directories) {
@@ -214,19 +217,19 @@ function Update-ScriptTree {
     $script:State.TreeFolders = $folders
     $script:State.TreeFiltered = $isFiltered
 
-    # Le script affiché reste sélectionné dans l'arbre reconstruit (le gestionnaire de sélection
-    # reconnaît le même script et conserve les valeurs saisies)
+    # The displayed script stays selected in the rebuilt tree (the selection handler
+    # recognizes the same script and keeps the values already entered)
     if ($currentItem) { $currentItem.IsSelected = $true }
     if ($scripts.Count -eq 0) {
         $empty = [System.Windows.Controls.TreeViewItem]::new()
-        $empty.Header = if ($filter) { 'Aucun script ne correspond.' } else { 'Aucun script trouvé.' }
+        $empty.Header = if ($filter) { Get-UiText 'window.tree.noMatch' } else { Get-UiText 'window.tree.noScript' }
         $empty.IsEnabled = $false
         [void]$tree.Items.Add($empty)
     }
 }
 
 function Stop-CatalogScan {
-    # Abandonne l'inventaire en cours, s'il y en a un, et libère son runspace.
+    # Abandons the current inventory, if any, and releases its runspace.
     if (-not $script:State) { return }
     if ($script:State.ScanTimer) { $script:State.ScanTimer.Stop() }
     $scan = $script:State.Scan
@@ -234,13 +237,13 @@ function Stop-CatalogScan {
     if ($script:Ui -and $script:Ui.ScanProgress) { $script:Ui.ScanProgress.Visibility = [System.Windows.Visibility]::Collapsed }
     if (-not $scan) { return }
     try { $scan.PowerShell.Stop() }
-    catch { Write-Verbose "Arrêt de l'inventaire : $($_.Exception.Message)" }
+    catch { Write-Verbose "Inventory stop: $($_.Exception.Message)" }
     $scan.PowerShell.Dispose()
 }
 
 function Start-CatalogScan {
-    # Lance l'inventaire des scripts dans un runspace d'arrière-plan : la fenêtre reste utilisable.
-    # Un minuteur (Update-CatalogScan) suit la progression et récupère le résultat.
+    # Starts the script inventory in a background runspace: the window stays usable.
+    # A timer (Update-CatalogScan) follows the progress and collects the result.
     Stop-CatalogScan
 
     $progress = [hashtable]::Synchronized(@{ Total = 0; Done = 0 })
@@ -252,17 +255,24 @@ function Start-CatalogScan {
         Summary          = $true
         Progress         = $progress
     }
-    # Le runspace ne partage rien avec la fenêtre : il charge lui-même les fonctions d'analyse
+    # The runspace shares nothing with the window: it loads the string catalog and the analysis
+    # functions itself. The language parameter is not called -Language on purpose: Settings.ps1
+    # resets $script:Language when it is dot-sourced, which would overwrite the argument.
     $private = Join-Path $script:ModuleRoot 'Private'
-    $files = @((Join-Path $private 'Settings.ps1'), (Join-Path $private 'Analysis.ps1'))
+    $files = @(
+        (Join-Path $private 'Settings.ps1'),
+        (Join-Path $private 'Text.ps1'),
+        (Join-Path $private 'Analysis.ps1')
+    )
     $scanScript = {
-        param($Files, $Arguments)
+        param($Files, $Arguments, $LanguageCode)
         $ErrorActionPreference = 'Stop'
         foreach ($file in $Files) { . $file }
+        Set-UiLanguage -Language $LanguageCode
         Get-ScriptCatalog @Arguments
     }
     $powerShell = [powershell]::Create()
-    [void]$powerShell.AddScript($scanScript.ToString()).AddArgument($files).AddArgument($arguments)
+    [void]$powerShell.AddScript($scanScript.ToString()).AddArgument($files).AddArgument($arguments).AddArgument($script:Language)
     $script:State.Scan = @{
         PowerShell = $powerShell
         Handle     = $powerShell.BeginInvoke()
@@ -273,12 +283,12 @@ function Start-CatalogScan {
     $bar = $script:Ui.ScanProgress
     $bar.IsIndeterminate = $true
     $bar.Visibility = [System.Windows.Visibility]::Visible
-    Set-Status 'Analyse des scripts...'
+    Set-Status (Get-UiText 'window.status.scanning')
     $script:State.ScanTimer.Start()
 }
 
 function Update-CatalogScan {
-    # Appelé par le minuteur : affiche la progression, ou termine l'inventaire s'il est fini.
+    # Called by the timer: shows the progress, or completes the inventory once it is done.
     $scan = $script:State.Scan
     if (-not $scan) {
         $script:State.ScanTimer.Stop()
@@ -292,7 +302,7 @@ function Update-CatalogScan {
             $bar.IsIndeterminate = $false
             $bar.Maximum = $total
             $bar.Value = $done
-            Set-Status "Analyse des scripts... $done / $total"
+            Set-Status (Get-UiText 'window.status.scanningOf' -Arguments @($done, $total))
         }
         return
     }
@@ -300,17 +310,17 @@ function Update-CatalogScan {
 }
 
 function Complete-CatalogScan {
-    # Récupère le résultat de l'inventaire terminé et met l'interface à jour.
+    # Collects the result of the finished inventory and updates the interface.
     $scan = $script:State.Scan
     $script:State.ScanTimer.Stop()
     $script:State.Scan = $null
     $script:Ui.ScanProgress.Visibility = [System.Windows.Visibility]::Collapsed
     try {
         $catalog = @($scan.PowerShell.EndInvoke($scan.Handle)) | Select-Object -First 1
-        if (-not $catalog) { throw "l'inventaire n'a renvoyé aucun résultat." }
+        if (-not $catalog) { throw (Get-UiText 'window.error.catalogEmpty') }
     }
     catch {
-        Set-Status "Échec de l'analyse : $($_.Exception.GetBaseException().Message)"
+        Set-Status (Get-UiText 'window.error.scanFailed' -Arguments @($_.Exception.GetBaseException().Message))
         throw
     }
     finally {
@@ -318,19 +328,18 @@ function Complete-CatalogScan {
     }
 
     $script:State.Scripts = @($catalog.Scripts)
-    $script:Window.Title = "Lanceur de scripts - $($catalog.Root)"
+    $script:State.ScanSeconds = $scan.Watch.Elapsed.TotalSeconds
+    $script:Window.Title = (Get-UiText 'window.title') + ' - ' + $catalog.Root
     $script:Ui.RootText.Text = $catalog.Root
     $script:Ui.RootText.ToolTip = $catalog.Root
     Update-ScriptTree
 
-    $message = '{0} script(s) · {1:N1} s' -f $script:State.Scripts.Count, $scan.Watch.Elapsed.TotalSeconds
-    $flagged = @($script:State.Scripts | Where-Object { $_.Warnings.Count -gt 0 }).Count
-    if ($flagged -gt 0) { $message += " · $flagged avec avertissement" }
-    $scanErrors = @($catalog.ScanErrors).Count
-    if ($scanErrors -gt 0) { $message += " · $scanErrors élément(s) illisible(s)" }
-    Set-Status $message
+    $script:State.ScanWarnings = @($script:State.Scripts | Where-Object { $_.Warnings.Count -gt 0 }).Count
+    $script:State.ScanErrors = @($catalog.ScanErrors).Count
+    Set-Status (Format-CatalogStatus -Count $script:State.Scripts.Count -Seconds $script:State.ScanSeconds `
+        -Warnings $script:State.ScanWarnings -Errors $script:State.ScanErrors)
 
-    # Actualiser recharge aussi le script affiché (paramètres ou aide modifiés entre-temps)
+    # Refresh also reloads the displayed script (parameters or help changed in the meantime)
     $current = $script:State.Current
     if ($current -and (Test-Path -LiteralPath $current.Path)) {
         $refreshed = Get-ScriptInfo -LiteralPath $current.Path -RelativePath $current.RelativePath
@@ -339,29 +348,29 @@ function Complete-CatalogScan {
 }
 
 function Select-LauncherRoot {
-    # « Dossier... » : choisit le dossier à analyser et relance l'inventaire.
+    # "Folder...": picks the folder to analyze and restarts the inventory.
     $selected = Select-FolderPath -InitialDirectory $script:State.Root
     if (-not $selected) { return }
     $root = (Resolve-Path -LiteralPath $selected).ProviderPath
     if ($root -eq $script:State.Root) {
-        Set-Status 'Ce dossier est déjà affiché.'
+        Set-Status (Get-UiText 'window.status.folderShown')
         return
     }
 
-    # Tout ce qui vient de l'ancien dossier disparaît : arborescence, sélection, filtre
+    # Everything coming from the previous folder goes away: tree, selection, filter
     $script:State.Root = $root
     $script:State.TreeFolders = @{}
     $script:Ui.ScriptTree.Items.Clear()
     $script:Ui.SearchBox.Text = ''
     Reset-ScriptDetail
-    $script:Window.Title = "Lanceur de scripts - $root"
+    $script:Window.Title = (Get-UiText 'window.title') + ' - ' + $root
     $script:Ui.RootText.Text = $root
     $script:Ui.RootText.ToolTip = $root
     Start-CatalogScan
 }
 
 function Initialize-EngineList {
-    # Remplit la liste des moteurs PowerShell disponibles sur le poste.
+    # Fills the list of PowerShell engines available on the machine.
     $script:State.Engines = @(Get-PowerShellEngine)
     $script:Ui.EngineCombo.Items.Clear()
     foreach ($engine in $script:State.Engines) {
@@ -374,8 +383,8 @@ function Initialize-EngineList {
 }
 
 function Select-EngineForScript {
-    # Choisit le moteur exigé par #Requires, sinon celui qui exécute le lanceur. Renvoie un
-    # avertissement si le moteur exigé est absent.
+    # Picks the engine required by #Requires, otherwise the one running the launcher. Returns a
+    # warning when the required engine is missing.
     param([Parameter(Mandatory)]$ScriptInfo)
 
     $preferred = Get-PreferredEdition -ScriptInfo $ScriptInfo
@@ -386,12 +395,12 @@ function Select-EngineForScript {
             return ''
         }
     }
-    if ($preferred -eq 'Core') { return 'Ce script exige PowerShell 7+, introuvable sur ce poste (pwsh.exe).' }
+    if ($preferred -eq 'Core') { return (Get-UiText 'window.error.coreRequired') }
     ''
 }
 
 function Update-FavoriteButton {
-    # Libellé du bouton Favori selon l'état du script affiché.
+    # Favorite button label according to the state of the displayed script.
     $button = $script:Ui.FavoriteButton
     $current = $script:State.Current
     if (-not $current) {
@@ -400,12 +409,12 @@ function Update-FavoriteButton {
     }
     $button.IsEnabled = $true
     $isFavorite = Test-FavoriteScript -State $script:State.UserState -ScriptPath $current.Path
-    $button.Content = if ($isFavorite) { '★ Favori' } else { '☆ Favori' }
-    $button.ToolTip = if ($isFavorite) { 'Retirer de mes favoris' } else { 'Ajouter à mes favoris' }
+    $button.Content = if ($isFavorite) { Get-UiText 'window.favorite.on' } else { Get-UiText 'window.favorite.off' }
+    $button.ToolTip = if ($isFavorite) { Get-UiText 'window.favorite.remove' } else { Get-UiText 'window.favorite.add' }
 }
 
 function Switch-CurrentFavorite {
-    # Ajoute le script affiché aux favoris de l'utilisateur, ou l'en retire.
+    # Adds the displayed script to the user favorites, or removes it from them.
     $current = $script:State.Current
     if (-not $current) { return }
     Edit-UserState { param($state) [void](Switch-FavoriteScript -State $state -ScriptPath $current.Path) }
@@ -414,8 +423,8 @@ function Switch-CurrentFavorite {
 }
 
 function Restore-RememberedInput {
-    # Remet dans le formulaire la dernière saisie lancée pour ce script. À appeler pendant le
-    # chargement ($script:State.Loading) : l'aperçu de commande est recalculé ensuite.
+    # Restores into the form the last input launched for this script. Call it while the
+    # form is loading ($script:State.Loading): the command preview is recomputed afterwards.
     param([Parameter(Mandatory)]$ScriptInfo)
 
     $remembered = Get-RememberedInput -State $script:State.UserState -ScriptPath $ScriptInfo.Path
@@ -435,14 +444,103 @@ function Restore-RememberedInput {
     $restored
 }
 
+function Format-CatalogStatus {
+    # Status bar after an inventory: count, duration, warnings, unreadable items.
+    param(
+        [Parameter(Mandatory)][int]$Count,
+        [double]$Seconds = 0,
+        [int]$Warnings = 0,
+        [int]$Errors = 0
+    )
+
+    $message = Get-UiText 'window.status.catalog' -Arguments @($Count, $Seconds)
+    if ($Warnings -gt 0) { $message += ' · ' + (Get-UiText 'window.status.warnings' -Arguments @($Warnings)) }
+    if ($Errors -gt 0) { $message += ' · ' + (Get-UiText 'window.status.errors' -Arguments @($Errors)) }
+    $message
+}
+
+function Set-UiText {
+    # Fills every fixed label of the window from the active catalog. Called at startup, and
+    # again after a language change.
+    $ui = $script:Ui
+    $script:Window.Title = Get-UiText 'window.title'
+    $ui.SearchHint.Text = Get-UiText 'window.search.hint'
+    $ui.FolderButton.Content = Get-UiText 'window.button.folder'
+    $ui.FolderButton.ToolTip = Get-UiText 'window.button.folder.tip'
+    $ui.RefreshButton.Content = Get-UiText 'window.button.refresh'
+    $ui.ParamTab.Header = Get-UiText 'window.tab.parameters'
+    $ui.HelpTab.Header = Get-UiText 'window.tab.help'
+    $ui.SetLabel.Text = Get-UiText 'window.label.parameterset'
+    $ui.ExampleLabel.Text = Get-UiText 'window.label.example'
+    $ui.ExtraArgsLabel.Text = Get-UiText 'window.label.extra'
+    $ui.CommandLabel.Text = Get-UiText 'window.label.command'
+    $ui.EngineLabel.Text = Get-UiText 'window.label.engine'
+    $ui.WhatIfCheck.Content = Get-UiText 'window.check.whatif'
+    $ui.NoExitCheck.Content = Get-UiText 'window.check.noexit'
+    $ui.NoProfileCheck.Content = Get-UiText 'window.check.noprofile'
+    $ui.ElevateCheck.Content = Get-UiText 'window.check.elevate'
+    $ui.ResetButton.Content = Get-UiText 'window.button.reset'
+    $ui.LocateButton.Content = Get-UiText 'window.button.locate'
+    $ui.CopyButton.Content = Get-UiText 'window.button.copy'
+    $ui.RunButton.Content = Get-UiText 'window.button.run'
+    $ui.LanguageCombo.ToolTip = Get-UiText 'window.language.tooltip'
+    if ($script:State.Current) { Update-FavoriteButton }
+    else {
+        $ui.ScriptTitle.Text = Get-UiText 'window.empty.title'
+        $ui.FavoriteButton.Content = Get-UiText 'window.favorite.off'
+    }
+}
+
+function Initialize-LanguageList {
+    # Language selector: one entry per catalog, current language selected.
+    $combo = $script:Ui.LanguageCombo
+    $combo.Items.Clear()
+    foreach ($code in Get-AvailableLanguage) {
+        $item = [System.Windows.Controls.ComboBoxItem]::new()
+        $item.Content = Get-UiLanguageName -Code $code
+        $item.Tag = $code
+        [void]$combo.Items.Add($item)
+        if ($code -eq $script:Language) { $combo.SelectedItem = $item }
+    }
+}
+
+function Switch-UiLanguage {
+    # Language picked in the window: load the catalog, refresh the texts and keep the selected
+    # script together with the values already typed. The choice is remembered for the next run.
+    $item = $script:Ui.LanguageCombo.SelectedItem
+    if ($null -eq $item) { return }
+    $code = [string]$item.Tag
+    if (-not $code -or $code -eq $script:Language) { return }
+
+    Edit-UserState { param($state) $state.Language = $code }
+    Set-UiLanguage -Language $code
+
+    $current = $script:State.Current
+    $values = @{}
+    foreach ($row in $script:State.Rows) { $values[$row.Parameter.Name] = Get-RowValue -Row $row }
+
+    Set-UiText
+    Update-ScriptTree
+    if ($current) {
+        Show-ScriptDetail -ScriptInfo $current -NoRestore
+        foreach ($row in $script:State.Rows) {
+            if ($values.ContainsKey($row.Parameter.Name)) { Set-RowValue -Row $row -Value $values[$row.Parameter.Name] }
+        }
+        Update-ParameterVisibility
+        Update-CommandPreview
+    }
+    Set-Status (Format-CatalogStatus -Count $script:State.Scripts.Count -Seconds $script:State.ScanSeconds `
+        -Warnings $script:State.ScanWarnings -Errors $script:State.ScanErrors)
+}
+
 function Reset-ScriptDetail {
-    # Partie droite au repos : aucun script affiché (démarrage, ou changement de dossier).
+    # Right-hand side at rest: no script displayed (startup, or folder change).
     $ui = $script:Ui
     $script:State.Current = $null
     $script:State.CurrentSet = ''
     $script:State.Rows = @()
     $script:State.LastCommand = $null
-    $ui.ScriptTitle.Text = 'Sélectionnez un script'
+    $ui.ScriptTitle.Text = Get-UiText 'window.empty.title'
     $ui.ScriptPath.Text = ''
     $ui.ScriptPath.ToolTip = $null
     $ui.ScriptSynopsis.Text = ''
@@ -461,13 +559,13 @@ function Reset-ScriptDetail {
     $ui.CommandBox.Text = ''
     foreach ($button in @($ui.RunButton, $ui.CopyButton, $ui.LocateButton, $ui.ResetButton)) { $button.IsEnabled = $false }
     $ui.FavoriteButton.IsEnabled = $false
-    $ui.FavoriteButton.Content = '☆ Favori'
+    $ui.FavoriteButton.Content = Get-UiText 'window.favorite.off'
     $ui.DetailTabs.SelectedIndex = 0
 }
 
 function Show-ScriptDetail {
-    # Affiche un script : en-tête, aide, formulaire de paramètres, options de lancement.
-    # -NoRestore : formulaire vide, sans reprendre la dernière saisie mémorisée.
+    # Displays a script: header, help, parameter form, launch options.
+    # -NoRestore: empty form, without restoring the last remembered input.
     param([Parameter(Mandatory)]$ScriptInfo, [switch]$NoRestore)
 
     $ui = $script:Ui
@@ -483,7 +581,7 @@ function Show-ScriptDetail {
             $ui.ScriptSynopsis.ClearValue([System.Windows.Controls.TextBlock]::ForegroundProperty)
         }
         else {
-            $ui.ScriptSynopsis.Text = 'Aucune aide (comment-based help) trouvée dans ce script.'
+            $ui.ScriptSynopsis.Text = Get-UiText 'window.detail.noHelp'
             $ui.ScriptSynopsis.Foreground = [System.Windows.Media.Brushes]::Gray
         }
         Set-OptionalText -Element $ui.ScriptInfo -Text (Get-RequirementSummary -ScriptInfo $ScriptInfo)
@@ -508,9 +606,9 @@ function Show-ScriptDetail {
             $ui.SetPanel.Visibility = [System.Windows.Visibility]::Collapsed
         }
 
-        # Exemples utilisables pour remplir le formulaire
+        # Examples usable to fill the form
         $ui.ExampleCombo.Items.Clear()
-        [void]$ui.ExampleCombo.Items.Add('(remplir depuis un exemple)')
+        [void]$ui.ExampleCombo.Items.Add((Get-UiText 'window.example.placeholder'))
         foreach ($example in $ScriptInfo.Examples) {
             $label = ($example.Code -split '\n')[0].Trim()
             $max = $script:Settings.MaxExampleLabel
@@ -531,7 +629,7 @@ function Show-ScriptDetail {
         $script:State.Rows = $rows.ToArray()
         if ($rows.Count -eq 0) {
             $none = [System.Windows.Controls.TextBlock]::new()
-            $none.Text = 'Ce script ne déclare aucun paramètre.'
+            $none.Text = Get-UiText 'window.detail.noParameter'
             $none.Foreground = [System.Windows.Media.Brushes]::Gray
             $none.Margin = [System.Windows.Thickness]::new(0, 0, 0, 12)
             [void]$ui.ParamPanel.Children.Add($none)
@@ -552,11 +650,11 @@ function Show-ScriptDetail {
         $script:State.Loading = $false
     }
     Update-ParameterVisibility
-    if ($restored) { Set-Status 'Dernière saisie restaurée (« Effacer la saisie » pour repartir de zéro).' }
+    if ($restored) { Set-Status (Get-UiText 'window.status.inputRestored') }
 }
 
 function Set-FormFromExample {
-    # Remplit le formulaire avec les arguments d'un .EXAMPLE du script affiché.
+    # Fills the form with the arguments of one .EXAMPLE of the displayed script.
     param([Parameter(Mandatory)][int]$Number)
 
     $info = $script:State.Current
@@ -569,7 +667,7 @@ function Set-FormFromExample {
     try {
         foreach ($row in $script:State.Rows) { Set-RowValue -Row $row -Value $null }
 
-        # Jeu de paramètres : le premier qui contient tous les paramètres de l'exemple
+        # Parameter set: the first one that contains all the parameters of the example
         $names = @($example.Arguments.Keys)
         $candidates = @($info.DefaultParameterSet) + @($info.ParameterSets) | Where-Object { $_ } | Select-Object -Unique
         foreach ($set in $candidates) {
@@ -588,7 +686,7 @@ function Set-FormFromExample {
             $argument = $example.Arguments[$name]
             if (-not $row) { $ignored.Add("-$name") }
             elseif (-not (Set-RowFromExample -Row $row -Argument $argument)) {
-                $ignored.Add("-$name $($argument.Text) (à saisir)")
+                $ignored.Add((Get-UiText 'window.example.toEnter' -Arguments @($name, $argument.Text)))
             }
         }
     }
@@ -596,23 +694,23 @@ function Set-FormFromExample {
         $script:State.Loading = $false
     }
     Update-ParameterVisibility
-    $message = "Exemple $Number appliqué."
-    if ($ignored.Count -gt 0) { $message += ' Non repris : ' + ($ignored -join ' ; ') }
+    $message = Get-UiText 'window.example.applied' -Arguments @($Number)
+    if ($ignored.Count -gt 0) { $message += ' ' + (Get-UiText 'window.example.ignored' -Arguments @(($ignored -join ' ; '))) }
     Set-Status $message
 }
 
 function Clear-ScriptForm {
-    # Vide le formulaire et oublie la saisie mémorisée pour le script affiché.
+    # Clears the form and forgets the remembered input for the displayed script.
     $current = $script:State.Current
     if (-not $current) { return }
     Edit-UserState { param($state) Remove-RememberedInput -State $state -ScriptPath $current.Path }
     Show-ScriptDetail -ScriptInfo $current -NoRestore
-    Set-Status 'Saisie effacée.'
+    Set-Status (Get-UiText 'window.status.inputCleared')
 }
 
 function Save-CurrentInput {
-    # Mémorise la saisie du script qui vient d'être lancé (valeurs non sensibles du jeu courant)
-    # et le place en tête des scripts récents.
+    # Remembers the input of the script just launched (non-sensitive values of the current set)
+    # and puts it at the top of the recent scripts.
     $current = $script:State.Current
     $set = $script:State.CurrentSet
     $values = @{}
@@ -629,7 +727,7 @@ function Save-CurrentInput {
 }
 
 function Start-SelectedScript {
-    # Lance le script affiché dans une nouvelle console, après confirmation si la saisie est incomplète.
+    # Launches the displayed script in a new console, after confirmation on incomplete input.
     $selected = $script:State.Current
     if ($null -eq $selected) { return }
     Update-CommandPreview
@@ -637,20 +735,20 @@ function Start-SelectedScript {
 
     $issues = [System.Collections.Generic.List[string]]::new()
     if ($result.Missing.Count -gt 0) {
-        $issues.Add('Paramètres obligatoires non renseignés : ' + ($result.Missing -join ', ') +
-            [Environment]::NewLine + '(PowerShell les demandera dans la console.)')
+        $issues.Add((Get-UiText 'window.confirm.missing' -Arguments @(($result.Missing -join ', '))) +
+            [Environment]::NewLine + (Get-UiText 'window.confirm.willAsk'))
     }
     foreach ($name in $result.Errors.Keys) { $issues.Add("-$name : " + ($result.Errors[$name] -join ' ; ')) }
     if ($issues.Count -gt 0) {
         $blankLine = [Environment]::NewLine * 2
-        $text = ($issues -join $blankLine) + $blankLine + 'Lancer quand même ?'
-        $answer = [System.Windows.MessageBox]::Show($script:Window, $text, 'Vérification',
+        $text = ($issues -join $blankLine) + $blankLine + (Get-UiText 'window.confirm.runAnyway')
+        $answer = [System.Windows.MessageBox]::Show($script:Window, $text, (Get-UiText 'window.confirm.title'),
             [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Warning)
         if ($answer -ne [System.Windows.MessageBoxResult]::Yes) { return }
     }
 
     $engineItem = $script:Ui.EngineCombo.SelectedItem
-    if ($null -eq $engineItem) { throw 'Aucun moteur PowerShell disponible.' }
+    if ($null -eq $engineItem) { throw (Get-UiText 'window.error.noEngine') }
     $elevate = ($script:Ui.ElevateCheck.IsChecked -eq $true)
     $scriptPath = $selected.Path
     $workingDirectory = $selected.Directory
@@ -672,9 +770,7 @@ function Start-SelectedScript {
     $enginePath = $engineItem.Tag.Path
     $length = $enginePath.Length + $arguments.Length + 3
     if ($length -gt $script:Settings.MaxCommandLineLength) {
-        throw ("La commande est trop longue pour être lancée ($length caractères, limite de Windows : " +
-            "$($script:Settings.MaxCommandLineLength)). Réduisez les valeurs saisies, ou copiez la commande " +
-            'et exécutez-la dans une console.')
+        throw (Get-UiText 'window.error.commandTooLong' -Arguments @($length, $script:Settings.MaxCommandLineLength))
     }
 
     try {
@@ -685,25 +781,25 @@ function Start-SelectedScript {
         $inner = $_.Exception
         while ($inner.InnerException) { $inner = $inner.InnerException }
         if ($inner -is [System.ComponentModel.Win32Exception] -and $inner.NativeErrorCode -eq 1223) {
-            Set-Status 'Élévation annulée.'
+            Set-Status (Get-UiText 'window.status.elevationCancelled')
             return
         }
         throw
     }
     Save-CurrentInput
-    Set-Status ('Lancé : {0} ({1})' -f $selected.Name, (Get-Date -Format 'HH:mm:ss'))
+    Set-Status (Get-UiText 'window.status.scriptLaunched' -Arguments @($selected.Name, (Get-Date -Format 'HH:mm:ss')))
 }
 
 function Copy-CommandToClipboard {
-    # Copie la commande générée dans le presse-papiers.
+    # Copies the generated command to the clipboard.
     $text = $script:Ui.CommandBox.Text
     if (-not $text) { return }
-    [System.Windows.Clipboard]::SetDataObject($text, $true)     # réessaie si le presse-papiers est occupé
-    Set-Status 'Commande copiée dans le presse-papiers.'
+    [System.Windows.Clipboard]::SetDataObject($text, $true)     # retries if the clipboard is busy
+    Set-Status (Get-UiText 'window.status.commandCopied')
 }
 
 function Show-ScriptLocation {
-    # Ouvre l'Explorateur sur le dossier du script, fichier sélectionné.
+    # Opens Explorer on the script folder, with the file selected.
     $selected = $script:State.Current
     if ($null -eq $selected) { return }
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -713,8 +809,8 @@ function Show-ScriptLocation {
 }
 
 function Register-UiEvent {
-    # Les gestionnaires s'exécutent après le retour de cette fonction : ils n'utilisent que des
-    # variables de portée script.
+    # The handlers run after this function returns, so they only use
+    # script-scoped variables.
     $ui = $script:Ui
 
     $script:State.SearchTimer.Add_Tick({
@@ -732,9 +828,9 @@ function Register-UiEvent {
                 $item = $script:Ui.ScriptTree.SelectedItem
                 if ($null -eq $item -or $null -eq $item.Tag) { return }
                 $entry = $item.Tag
-                # Même script (arbre reconstruit par la recherche) : on garde les valeurs saisies
+                # Same script (tree rebuilt by the search): the values entered are kept
                 if ($script:State.Current -and $script:State.Current.Path -eq $entry.Path) { return }
-                # Analyse complète à la sélection : relit aussi les modifications faites depuis l'inventaire
+                # Full analysis on selection: also re-reads changes made since the inventory
                 $selectedInfo = Get-ScriptInfo -LiteralPath $entry.Path -RelativePath $entry.RelativePath
                 Show-ScriptDetail -ScriptInfo $selectedInfo
             }
@@ -754,6 +850,10 @@ function Register-UiEvent {
     $ui.LocateButton.Add_Click({ Invoke-UiAction { Show-ScriptLocation } })
     $ui.RefreshButton.Add_Click({ Invoke-UiAction { Start-CatalogScan } })
     $ui.FolderButton.Add_Click({ Invoke-UiAction { Select-LauncherRoot } })
+    $ui.LanguageCombo.Add_SelectionChanged({
+            if ($script:State.Loading) { return }
+            Invoke-UiAction { Switch-UiLanguage }
+        })
     $ui.FavoriteButton.Add_Click({ Invoke-UiAction { Switch-CurrentFavorite } })
     $ui.ResetButton.Add_Click({ Invoke-UiAction { Clear-ScriptForm } })
     $ui.ExampleCombo.Add_SelectionChanged({
@@ -797,21 +897,23 @@ function Register-UiEvent {
 }
 
 function Initialize-LauncherWindow {
-    # Charge la fenêtre (XAML), référence ses éléments nommés et branche les événements.
+    # Loads the window (XAML), references its named elements and wires the events.
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
     $xamlPath = Join-Path $script:ModuleRoot 'MainWindow.xaml'
     $script:Window = [System.Windows.Markup.XamlReader]::Parse([System.IO.File]::ReadAllText($xamlPath))
     $script:Ui = @{}
     $names = @(
-        'SearchBox', 'SearchHint', 'RootText', 'ScriptTree', 'StatusText', 'RefreshButton', 'FolderButton', 'ScriptTitle', 'ScriptPath',
+        'SearchBox', 'SearchHint', 'RootText', 'ScriptTree', 'StatusText', 'RefreshButton', 'FolderButton',
+        'LanguageCombo', 'ScriptTitle', 'ScriptPath',
         'ScriptSynopsis', 'ScriptInfo', 'ScriptWarning', 'DetailTabs', 'DescriptionPanel', 'ScriptDescription',
         'SetPanel', 'SetCombo', 'ParamPanel', 'VerboseCheck', 'WhatIfCheck', 'ExtraArgsBox', 'HelpText',
         'CommandBox', 'EngineCombo', 'NoExitCheck', 'NoProfileCheck', 'ElevateCheck', 'LocateButton',
-        'CopyButton', 'RunButton', 'ResetButton', 'FavoriteButton', 'ScanProgress', 'ExamplePanel', 'ExampleCombo'
+        'CopyButton', 'RunButton', 'ResetButton', 'FavoriteButton', 'ScanProgress', 'ExamplePanel', 'ExampleCombo',
+        'ParamTab', 'HelpTab', 'SetLabel', 'ExampleLabel', 'ExtraArgsLabel', 'CommandLabel', 'EngineLabel'
     )
     foreach ($name in $names) {
         $element = $script:Window.FindName($name)
-        if ($null -eq $element) { throw "Élément d'interface introuvable : $name" }
+        if ($null -eq $element) { throw (Get-UiText 'window.error.uiElement' -Arguments @($name)) }
         $script:Ui[$name] = $element
     }
     $script:State.SearchTimer = [System.Windows.Threading.DispatcherTimer]::new()
@@ -819,19 +921,21 @@ function Initialize-LauncherWindow {
     $script:State.ScanTimer = [System.Windows.Threading.DispatcherTimer]::new()
     $script:State.ScanTimer.Interval = [TimeSpan]::FromMilliseconds($script:Settings.ScanPollMs)
     Initialize-EngineList
+    Initialize-LanguageList
+    Set-UiText
     Register-UiEvent
 }
 
 function Assert-LauncherPrerequisite {
-    # Vérifie ce dont WPF a besoin ; lève une erreur explicite sinon.
+    # Checks what WPF needs; raises an explicit error otherwise.
     if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
-        throw 'Ce lanceur utilise WPF : il ne fonctionne que sous Windows.'
+        throw (Get-UiText 'window.error.needsWindows')
     }
     $languageMode = $ExecutionContext.SessionState.LanguageMode
     if ($languageMode -ne [System.Management.Automation.PSLanguageMode]::FullLanguage) {
-        throw "Mode de langage $languageMode : WPF exige FullLanguage (stratégie AppLocker/WDAC ?)."
+        throw (Get-UiText 'window.error.needsFullLanguage' -Arguments @($languageMode))
     }
     if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne [System.Threading.ApartmentState]::STA) {
-        throw "WPF exige un thread STA. Relancez avec : powershell.exe -STA -File `"$PSCommandPath`""
+        throw (Get-UiText 'window.error.needsSta' -Arguments @($PSCommandPath))
     }
 }

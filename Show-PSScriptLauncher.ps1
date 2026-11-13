@@ -2,88 +2,95 @@
 
 <#
 .SYNOPSIS
-    Interface graphique (façon Show-Command) pour lancer les scripts PowerShell de ce dossier
-    et de ses sous-dossiers, à partir de l'aide intégrée à chaque script.
+    Graphical interface (in the spirit of Show-Command) to run the PowerShell scripts of this
+    folder and its subfolders, from the help each script already contains.
 
 .DESCRIPTION
-    Point d'entrée du lanceur : charge le module PSScriptLauncher (dossier voisin) et ouvre
-    la fenêtre sur le dossier indiqué.
+    Entry point: loads the PSScriptLauncher module (sibling folder) and opens the window on the
+    requested folder.
 
-    Le lanceur lit, pour chaque script .ps1, le bloc param() et l'aide comment-based par analyse
-    syntaxique (AST) : les scripts ne sont jamais exécutés pendant la lecture. L'inventaire se
-    fait en arrière-plan, la fenêtre reste utilisable.
+    For every .ps1 script, the launcher reads the param() block and the comment-based help through
+    syntax analysis (AST): scripts are never executed while being read. The inventory runs in the
+    background, so the window stays usable.
 
-    À gauche : mes favoris, mes scripts récents, l'arborescence et une recherche (nom, dossier,
-    synopsis ; insensible à la casse et aux accents). À droite : un formulaire généré à partir
-    des paramètres (jeux de paramètres, champs obligatoires, ValidateSet et enums en listes,
-    ValidateRange et ValidatePattern vérifiés à la saisie, boutons Fichier/Dossier pour les
-    chemins), le remplissage depuis un .EXAMPLE, l'aide complète, et la commande générée, que
-    l'on peut copier ou lancer dans une nouvelle console.
+    Left: favorites, recent scripts, the tree and a search (name, folder, synopsis; case- and
+    accent-insensitive). Right: a form generated from the parameters (parameter sets, mandatory
+    fields, ValidateSet and enums as lists, ValidateRange and ValidatePattern checked while
+    typing, File/Folder buttons for paths), filling from an .EXAMPLE, the full help, and the
+    generated command, which can be copied or run in a new console.
 
-    Lecture de l'aide : mêmes règles que Get-Help, avec deux tolérances voulues :
-    - un type de paramètre inconnu de la session (type d'un module non chargé) n'empêche pas
-      la lecture, alors qu'il fait échouer Get-Help ;
-    - un bloc d'aide en tête de script que Get-Help ignore pour une question de mise en forme
-      (ligne vide manquante après #Requires, aide placée après using...) est quand même
-      affiché, avec un avertissement qui indique la correction à faire.
+    Help reading follows the Get-Help rules, with two deliberate tolerances:
+    - a parameter type unknown to the session (type from a module that is not loaded) does not
+      prevent reading, whereas it makes Get-Help fail;
+    - a help block at the top of a script that Get-Help ignores for a formatting reason (missing
+      blank line after #Requires, help placed after using...) is still displayed, with a warning
+      telling what to fix.
 
-    Saisie des valeurs :
-    - les dates et les nombres sont interprétés selon la culture de l'utilisateur (09/11/2026,
-      3,5) puis réécrits au format invariant (2026-11-09, 3.5) ;
-    - PSCredential et SecureString ne transitent jamais en clair : la commande générée appelle
-      Get-Credential ou Read-Host -AsSecureString dans la console lancée.
+    Value entry:
+    - dates and numbers are interpreted in the user's culture (11/09/2026, 3.5) then rewritten in
+      the invariant format (2026-11-09, 3.5);
+    - PSCredential and SecureString never travel in clear text: the generated command calls
+      Get-Credential or Read-Host -AsSecureString in the launched console.
 
-    Données personnelles : favoris, scripts récents et dernière saisie lancée de chaque script
-    sont enregistrés dans le profil de l'utilisateur connecté
-    (%LOCALAPPDATA%\PSScriptLauncher), jamais dans le dossier des scripts. Les valeurs des
-    paramètres dont le nom évoque un secret (password, token, secret, key...) ne sont pas
-    conservées.
+    Personal data: favorites, recent scripts and the last input run of each script are stored in
+    the profile of the logged-on user (%LOCALAPPDATA%\PSScriptLauncher), never in the scripts
+    folder. Values of parameters whose name suggests a secret (password, token, secret, key...)
+    are not kept.
 
-    Le dossier analysé est celui de ce script, ou celui de -Path. Il peut être changé en cours
-    d'utilisation (bouton « Dossier... », Ctrl+O) : l'inventaire est relancé sans redémarrer.
+    The analyzed folder is the one holding this script, or the one given to -Path. It is shown
+    under the search box and can be changed while the window is open (Folder... button, Ctrl+O):
+    the inventory starts again without restarting anything.
 
-    Raccourcis : Ctrl+O (dossier), Ctrl+F (recherche), F5 (actualiser), Ctrl+Entrée (lancer).
+    Shortcuts: Ctrl+O (folder), Ctrl+F (search), F5 (refresh), Ctrl+Enter (run).
 
 .PARAMETER Path
-    Dossier racine à parcourir. Par défaut : le dossier qui contient ce lanceur.
+    Root folder to scan. Default: the folder holding this launcher.
 
 .PARAMETER ExcludePattern
-    Motifs (caractères génériques) appliqués au chemin relatif et au nom des scripts à masquer.
-    Par défaut : les fichiers de tests Pester (*.Tests.ps1). Le dossier PSScriptLauncher (le
-    lanceur lui-même) est toujours ignoré.
+    Wildcard patterns applied to the relative path and to the script name to hide. Default: the
+    Pester test files (*.Tests.ps1). The PSScriptLauncher folder (the launcher itself) is always
+    ignored.
 
 .PARAMETER StatePath
-    Fichier d'état de l'utilisateur (favoris, récents, saisies). Par défaut :
+    User state file (favorites, recents, inputs). Default:
     %LOCALAPPDATA%\PSScriptLauncher\state.json.
+
+.PARAMETER Language
+    Interface language ('en', 'fr'). Default: the saved preference, then the Windows UI language.
 
 .EXAMPLE
     .\Show-PSScriptLauncher.ps1
 
-    Ouvre le lanceur sur le dossier qui contient ce script.
+    Opens the launcher on the folder holding this script.
 
 .EXAMPLE
     .\Show-PSScriptLauncher.ps1 -ExcludePattern '*.Tests.ps1', 'Lib\*', '*\_Archives\*'
 
-    Masque aussi les bibliothèques dot-sourcées et les archives.
+    Also hides dot-sourced libraries and archives.
+
+.EXAMPLE
+    .\Show-PSScriptLauncher.ps1 -Path D:\Scripts -Language fr
+
+    Opens another folder, with a French interface.
 
 .INPUTS
-    None. Ce script n'accepte pas d'entrée par le pipeline.
+    None. This script does not accept pipeline input.
 
 .OUTPUTS
-    None. Ce script ouvre une fenêtre et ne renvoie aucun objet.
+    None. This script opens a window and returns no object.
 
 .NOTES
-    Version : 2.0.0 (2026-11-10)
+    Version: 1.0.0 (2026-11-13)
 
-    Prérequis : Windows, Windows PowerShell 5.1 ou PowerShell 7+, session STA (défaut des deux
-    consoles) et mode de langage FullLanguage (WPF n'est pas utilisable en ConstrainedLanguage).
-    Le dossier PSScriptLauncher doit se trouver à côté de ce script.
+    Requirements: Windows, Windows PowerShell 5.1 or PowerShell 7+, STA session (default in both
+    consoles) and FullLanguage language mode (WPF cannot be used in ConstrainedLanguage). The
+    PSScriptLauncher folder must sit next to this script.
 
-    Raccourci conseillé, qui masque la console du lanceur :
-        powershell.exe -NoProfile -WindowStyle Hidden -File "<dossier>\Show-PSScriptLauncher.ps1"
+    Recommended shortcut, which hides the launcher console:
+        powershell.exe -NoProfile -WindowStyle Hidden -File "<folder>\Show-PSScriptLauncher.ps1"
 
-    Chaque script est lancé dans son propre processus (nouvelle console) : un exit, une erreur
-    ou un Read-Host dans un script n'affecte pas le lanceur.
+    Each script runs in its own process (a new console): an exit, an error or a Read-Host in a
+    script does not affect the launcher.
 #>
 [CmdletBinding()]
 param(
@@ -94,7 +101,9 @@ param(
     [ValidateNotNull()]
     [string[]]$ExcludePattern = @('*.Tests.ps1'),
 
-    [string]$StatePath
+    [string]$StatePath,
+
+    [string]$Language
 )
 
 $ErrorActionPreference = 'Stop'
@@ -106,17 +115,18 @@ try {
     Import-Module -Name $manifest -Force
 }
 catch {
-    $message = "Le module du lanceur n'a pas pu être chargé ($manifest) : $($_.Exception.Message)"
-    # Message visible même si la console est masquée (raccourci -WindowStyle Hidden)
+    $message = "The launcher module could not be loaded ($manifest): $($_.Exception.Message)"
+    # Visible even when the console is hidden (-WindowStyle Hidden shortcut)
     try {
         Add-Type -AssemblyName PresentationFramework
-        [void][System.Windows.MessageBox]::Show($message, 'Lanceur de scripts',
+        [void][System.Windows.MessageBox]::Show($message, 'Script launcher',
             [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
     }
-    catch { Write-Warning 'Boîte de dialogue WPF indisponible.' }
+    catch { Write-Warning 'WPF dialog unavailable.' }
     throw
 }
 
 $launcherParameters = @{ Path = $Path; ExcludePattern = $ExcludePattern }
 if ($StatePath) { $launcherParameters['StatePath'] = $StatePath }
+if ($Language) { $launcherParameters['Language'] = $Language }
 Show-PSScriptLauncher @launcherParameters

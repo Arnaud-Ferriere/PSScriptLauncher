@@ -1,6 +1,6 @@
-﻿# État propre à l'utilisateur connecté : favoris, scripts récents, dernière saisie par script.
-# Tout est écrit dans un fichier JSON de son profil (%LOCALAPPDATA%), jamais dans le dossier
-# des scripts : rien n'est partagé avec les collègues ni visible par eux.
+﻿# State specific to the logged-on user: favorites, recent scripts, last input per script.
+# Everything is written to a JSON file of the user profile (%LOCALAPPDATA%), never to the
+# scripts folder: nothing is shared with colleagues nor visible to them.
 
 function Get-DefaultStatePath {
     # %LOCALAPPDATA%\PSScriptLauncher\state.json
@@ -9,25 +9,26 @@ function Get-DefaultStatePath {
 }
 
 function New-UserState {
-    # État vide.
+    # Empty state.
     @{
         Version   = 1
+        Language  = ''
         Favorites = [System.Collections.Generic.List[string]]::new()
         Recents   = [System.Collections.Generic.List[string]]::new()
-        Scripts   = @{}       # clé de script -> @{ ParameterSet; Values = @{ nom = valeur }; LastUsed }
+        Scripts   = @{}       # script key -> @{ ParameterSet; Values = @{ name = value }; LastUsed }
     }
 }
 
 function Get-ScriptStateKey {
-    # Clé d'un script dans l'état : son chemin complet, sans distinction de casse.
+    # Key of a script in the state: its full path, without regard to case.
     param([Parameter(Mandatory)][string]$Path)
 
     $Path.ToLowerInvariant()
 }
 
 function ConvertTo-PlainHashtable {
-    # ConvertFrom-Json renvoie des PSCustomObject (pas de -AsHashtable en Windows PowerShell 5.1) :
-    # conversion récursive en tables de hachage et tableaux.
+    # ConvertFrom-Json returns PSCustomObject (no -AsHashtable in Windows PowerShell 5.1):
+    # recursive conversion into hashtables and arrays.
     param($InputObject)
 
     if ($null -eq $InputObject) { return $null }
@@ -48,8 +49,8 @@ function ConvertTo-PlainHashtable {
 }
 
 function Read-UserState {
-    # Charge l'état. Fichier absent, illisible ou d'un format inattendu : état vide (le lanceur
-    # ne doit jamais refuser de démarrer pour une préférence perdue).
+    # Loads the state. File missing, unreadable or of an unexpected format: empty state (the
+    # launcher must never refuse to start because of a lost preference).
     param([Parameter(Mandatory)][string]$Path)
 
     $state = New-UserState
@@ -58,6 +59,7 @@ function Read-UserState {
         $json = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
         $data = ConvertTo-PlainHashtable -InputObject ($json | ConvertFrom-Json)
         if ($data -isnot [hashtable]) { return $state }
+        $state.Language = [string]$data['Language']
         foreach ($item in @($data['Favorites'])) { if ($item -is [string] -and $item) { $state.Favorites.Add($item) } }
         foreach ($item in @($data['Recents'])) { if ($item -is [string] -and $item) { $state.Recents.Add($item) } }
         if ($data['Scripts'] -is [hashtable]) {
@@ -74,16 +76,16 @@ function Read-UserState {
         }
     }
     catch {
-        Write-Verbose "État utilisateur illisible, ignoré ($Path) : $($_.Exception.Message)"
+        Write-Verbose "Unreadable user state, ignored ($Path): $($_.Exception.Message)"
         return (New-UserState)
     }
     $state
 }
 
 function Copy-JsonReadyValue {
-    # Copie « propre » d'une valeur avant ConvertTo-Json. En Windows PowerShell 5.1, un tableau
-    # enveloppé dans un PSObject (renvoyé par une fonction, par exemple) est sérialisé sous la
-    # forme { "value": [...], "Count": n } : on reconstruit donc tableaux et tables.
+    # "Clean" copy of a value before ConvertTo-Json. In Windows PowerShell 5.1, an array wrapped
+    # in a PSObject (returned by a function, for example) is serialized as
+    # { "value": [...], "Count": n }: arrays and tables are therefore rebuilt.
     param($InputObject)
 
     if ($null -eq $InputObject) { return $null }
@@ -103,7 +105,7 @@ function Copy-JsonReadyValue {
 }
 
 function Remove-PathFromList {
-    # Retire un chemin d'une liste, sans distinction de casse.
+    # Removes a path from a list, without regard to case.
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[string]]$List,
         [Parameter(Mandatory)][string]$Path
@@ -115,8 +117,8 @@ function Remove-PathFromList {
 }
 
 function Save-UserState {
-    # Écrit l'état. Écriture dans un fichier temporaire puis remplacement : un arrêt en cours
-    # d'écriture ne laisse pas un fichier tronqué.
+    # Writes the state. Write to a temporary file then replace: a stop in the middle of the
+    # write does not leave a truncated file.
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][hashtable]$State
@@ -126,6 +128,7 @@ function Save-UserState {
     if ($folder -and -not (Test-Path -LiteralPath $folder)) { $null = New-Item -ItemType Directory -Path $folder -Force }
     $data = [ordered]@{
         Version   = 1
+        Language  = [string]$State.Language
         Favorites = $State.Favorites.ToArray()
         Recents   = $State.Recents.ToArray()
         Scripts   = Copy-JsonReadyValue -InputObject $State.Scripts
@@ -137,18 +140,18 @@ function Save-UserState {
 }
 
 function Test-SensitiveParameterName {
-    # Paramètres dont la valeur ne doit pas être conservée sur disque, même saisie en clair.
+    # Parameters whose value must not be kept on disk, even when typed in clear text.
     param([Parameter(Mandatory)][string]$Name)
 
     $Name -match '(?i)pass(word|wd|phrase)?|pwd|secret|token|credential|api_?key|access_?key|private_?key|client_?key'
 }
 
 function ConvertTo-StoredValue {
-    # Valeur d'une ligne du formulaire -> valeur enregistrable ($null : rien à conserver).
+    # Value of a form row -> storable value ($null: nothing to keep).
     param([Parameter(Mandatory)]$Parameter, $Value)
 
-    # Les cases « demander au lancement » (Credential, SecureString) ne contiennent aucun secret ;
-    # en revanche une valeur saisie en clair n'est pas conservée si le nom du paramètre évoque un secret.
+    # The "ask at launch" check boxes (Credential, SecureString) hold no secret; on the other
+    # hand, a value typed in clear text is not kept if the parameter name suggests a secret.
     $isFreeText = $Parameter.Kind -notin 'Switch', 'Bool', 'Choice', 'MultiChoice', 'Credential', 'SecureString'
     if ($isFreeText -and (Test-SensitiveParameterName -Name $Parameter.Name)) { return $null }
     switch ($Parameter.Kind) {
@@ -157,7 +160,7 @@ function ConvertTo-StoredValue {
             return $null
         }
         'Credential' {
-            # On retient seulement « demander au lancement » et le nom d'utilisateur : jamais de mot de passe
+            # Only "ask at launch" and the user name are kept: never a password
             if ($Value -and $Value.Prompt) { return @{ Prompt = $true; UserName = [string]$Value.UserName } }
             return $null
         }
@@ -178,8 +181,8 @@ function ConvertTo-StoredValue {
 }
 
 function Set-RememberedInput {
-    # Retient la saisie d'un script (jeu de paramètres + valeurs non sensibles) et le place en
-    # tête des scripts récents. Modifie $State ; l'appelant enregistre.
+    # Remembers the input of a script (parameter set + non-sensitive values) and puts it at
+    # the top of the recent scripts. Modifies $State; the caller saves.
     param(
         [Parameter(Mandatory)][hashtable]$State,
         [Parameter(Mandatory)][string]$ScriptPath,
@@ -207,21 +210,21 @@ function Set-RememberedInput {
 }
 
 function Get-RememberedInput {
-    # Dernière saisie retenue pour un script, ou $null.
+    # Last input remembered for a script, or $null.
     param([Parameter(Mandatory)][hashtable]$State, [Parameter(Mandatory)][string]$ScriptPath)
 
     $State.Scripts[(Get-ScriptStateKey -Path $ScriptPath)]
 }
 
 function Remove-RememberedInput {
-    # Oublie la saisie retenue pour un script.
+    # Forgets the input remembered for a script.
     param([Parameter(Mandatory)][hashtable]$State, [Parameter(Mandatory)][string]$ScriptPath)
 
     $State.Scripts.Remove((Get-ScriptStateKey -Path $ScriptPath))
 }
 
 function Test-FavoriteScript {
-    # Vrai si le script est dans les favoris.
+    # True if the script is a favorite.
     param([Parameter(Mandatory)][hashtable]$State, [Parameter(Mandatory)][string]$ScriptPath)
 
     foreach ($item in $State.Favorites) {
@@ -231,7 +234,7 @@ function Test-FavoriteScript {
 }
 
 function Switch-FavoriteScript {
-    # Ajoute le script aux favoris, ou l'en retire. Renvoie $true s'il est favori après l'appel.
+    # Adds the script to the favorites, or removes it. Returns $true if it is a favorite after the call.
     param([Parameter(Mandatory)][hashtable]$State, [Parameter(Mandatory)][string]$ScriptPath)
 
     if (Test-FavoriteScript -State $State -ScriptPath $ScriptPath) {

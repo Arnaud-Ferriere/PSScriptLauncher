@@ -1,16 +1,16 @@
-﻿# Conversion des valeurs saisies, construction de la commande et lancement.
+﻿# Conversion of typed values, command building and launch.
 
 function ConvertTo-PSQuotedString {
-    # Littéral entre apostrophes. CodeGeneration double aussi les apostrophes typographiques
-    # (’ ‘ ‚ ‛), que PowerShell traite comme des apostrophes droites.
+    # Single-quoted literal. CodeGeneration also doubles typographic apostrophes
+    # (’ ‘ ‚ ‛), which PowerShell treats as straight apostrophes.
     param([AllowNull()][AllowEmptyString()][string]$Value)
 
     "'" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent([string]$Value) + "'"
 }
 
 function ConvertTo-InvariantNumber {
-    # Lit le nombre dans la culture de l'utilisateur (3,5 en fr-FR), à défaut en culture invariante
-    # (3.5), et le réécrit en notation invariante. $null si la saisie n'est pas un nombre valide.
+    # Reads the number in the user's culture (3,5 in fr-FR), or else in the invariant culture
+    # (3.5), and rewrites it in invariant notation. $null if the input is not a valid number.
     param([string]$Text, [switch]$Integer)
 
     $styles = [System.Globalization.NumberStyles]::Float
@@ -32,7 +32,7 @@ function ConvertTo-InvariantNumber {
 }
 
 function ConvertTo-InvariantDate {
-    # Lit la date dans la culture de l'utilisateur et la réécrit en ISO 8601 (sans ambiguïté).
+    # Reads the date in the user's culture and rewrites it in ISO 8601 (unambiguous).
     param([string]$Text)
 
     $value = [datetime]::MinValue
@@ -44,31 +44,42 @@ function ConvertTo-InvariantDate {
 }
 
 function ConvertTo-ArgumentValue {
-    # Valeur scalaire saisie -> texte d'argument PowerShell, plus un message si elle est invalide.
+    # Typed scalar value -> PowerShell argument text, plus a message when it is not valid.
     param([string]$Text, [string]$ValueKind, [switch]$Integer, [switch]$Decimal)
 
     if ($ValueKind -eq 'Number') {
         $number = ConvertTo-InvariantNumber -Text $Text -Integer:$Integer
         if ($null -ne $number) {
-            # Nombre en littéral. Pour un [decimal], suffixe d : une chaîne ('1234.10') serait
-            # convertie en passant par un [double] (15 chiffres significatifs, échelle perdue).
+            # Number as a literal. For a [decimal], d suffix: a string ('1234.10') would be
+            # converted through a [double] (15 significant digits, scale lost).
             if ($Decimal) { $number += 'd' }
             return [pscustomobject]@{ Text = $number; Error = $null }
         }
-        $expected = if ($Integer) { 'nombre entier attendu' } else { 'nombre attendu' }
-        return [pscustomobject]@{ Text = (ConvertTo-PSQuotedString $Text); Error = "« $Text » : $expected" }
+        $expected = if ($Integer) {
+            Get-UiText 'command.error.integerExpected'
+        }
+        else {
+            Get-UiText 'command.error.numberExpected'
+        }
+        return [pscustomobject]@{
+            Text  = (ConvertTo-PSQuotedString $Text)
+            Error = (Get-UiText 'command.error.valueRejected' -Arguments @($Text, $expected))
+        }
     }
     if ($ValueKind -eq 'Date') {
         $date = ConvertTo-InvariantDate -Text $Text
         if ($null -ne $date) { return [pscustomobject]@{ Text = (ConvertTo-PSQuotedString $date); Error = $null } }
-        return [pscustomobject]@{ Text = (ConvertTo-PSQuotedString $Text); Error = "« $Text » : date non reconnue" }
+        return [pscustomobject]@{
+            Text  = (ConvertTo-PSQuotedString $Text)
+            Error = (Get-UiText 'command.error.dateNotRecognized' -Arguments @($Text))
+        }
     }
     [pscustomobject]@{ Text = (ConvertTo-PSQuotedString $Text); Error = $null }
 }
 
 function Test-ParameterValidation {
-    # Applique [ValidateRange()] et [ValidatePattern()] à une valeur saisie. Renvoie le message
-    # d'erreur, ou $null si la valeur est acceptable (ou si rien n'est vérifiable).
+    # Applies [ValidateRange()] and [ValidatePattern()] to a typed value. Returns the error
+    # message, or $null when the value is acceptable (or nothing can be checked).
     param(
         [Parameter(Mandatory)]$Parameter,
         [AllowEmptyString()][string]$Text
@@ -88,7 +99,7 @@ function Test-ParameterValidation {
             $tooHigh = $null -ne $max -and ($value -gt $max -or ($range['ExcludeMax'] -and $value -eq $max))
             if ($tooLow -or $tooHigh) {
                 $expected = (@(Format-ParameterValidation -Validation @{ Range = $range }) -join '').ToLower()
-                return "« $Text » : hors limites ($expected)"
+                return (Get-UiText 'command.error.outOfRange' -Arguments @($Text, $expected))
             }
         }
     }
@@ -96,17 +107,20 @@ function Test-ParameterValidation {
         $pattern = $validation['Pattern']
         $isMatch = $true
         try { $isMatch = [regex]::IsMatch($Text, $pattern.Regex, $pattern.Options) }
-        catch { Write-Verbose "Motif ValidatePattern invalide, non vérifié : $($pattern.Regex)" }
+        catch { Write-Verbose "Invalid ValidatePattern pattern, not checked: $($pattern.Regex)" }
         if (-not $isMatch) {
-            if ($pattern.Message) { return "« $Text » : $($pattern.Message -f $Text, $pattern.Regex)" }
-            return "« $Text » : ne correspond pas au motif $($pattern.Regex)"
+            if ($pattern.Message) {
+                return (Get-UiText 'command.error.valueRejected' -Arguments @(
+                        $Text, ($pattern.Message -f $Text, $pattern.Regex)))
+            }
+            return (Get-UiText 'command.error.patternMismatch' -Arguments @($Text, $pattern.Regex))
         }
     }
     $null
 }
 
 function ConvertTo-ParameterArgument {
-    # Valeur saisie pour un paramètre -> argument de ligne de commande ($null si non renseigné).
+    # Typed value for one parameter -> command-line argument ($null when it is not filled in).
     param([Parameter(Mandatory)]$Parameter, $Value)
 
     $name = $Parameter.Name
@@ -128,8 +142,9 @@ function ConvertTo-ParameterArgument {
         }
         'Credential' {
             if ($Value -and $Value.Prompt) {
-                # -Message est requis par Windows PowerShell 5.1 dès que -UserName est fourni
-                $message = ConvertTo-PSQuotedString "Identifiants pour -$name"
+                # -Message is required by Windows PowerShell 5.1 as soon as -UserName is given
+                $message = ConvertTo-PSQuotedString (
+                    Get-UiText 'command.credential.message' -Arguments @($name))
                 if ([string]::IsNullOrWhiteSpace($Value.UserName)) {
                     $text = "-$name (Get-Credential -Message $message)"
                 }
@@ -185,7 +200,7 @@ function ConvertTo-ParameterArgument {
 }
 
 function Get-ParameterSetMembership {
-    # $null si le paramètre n'appartient pas au jeu ; sinon $true (obligatoire) ou $false.
+    # $null when the parameter does not belong to the set; otherwise $true (mandatory) or $false.
     param([Parameter(Mandatory)]$Parameter, [string]$ParameterSet)
 
     $sets = $Parameter.Sets
@@ -196,7 +211,7 @@ function Get-ParameterSetMembership {
 }
 
 function New-ScriptCommand {
-    # Construit la commande d'appel du script à partir des valeurs saisies.
+    # Builds the script call command from the typed values.
     param(
         [Parameter(Mandatory)]$ScriptInfo,
         [string]$ParameterSet,
@@ -234,8 +249,8 @@ function New-ScriptCommand {
 }
 
 function ConvertTo-ProcessArgument {
-    # Échappe un argument pour la ligne de commande Windows (règles CommandLineToArgvW/MSVCRT :
-    # 2n barres obliques inverses + guillemet -> n barres + fin de chaîne ; 2n+1 -> n + guillemet).
+    # Escapes an argument for the Windows command line (CommandLineToArgvW/MSVCRT rules:
+    # 2n backslashes + a quote -> n backslashes + end of string; 2n+1 -> n + quote).
     param([AllowEmptyString()][string]$Value)
 
     if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
@@ -258,8 +273,8 @@ function ConvertTo-ProcessArgument {
 }
 
 function New-LaunchArgumentString {
-    # Arguments de powershell.exe / pwsh.exe pour exécuter la commande dans une nouvelle console.
-    # Pas de -EncodedCommand : souvent signalé par les EDR, et illisible dans les journaux.
+    # Arguments of powershell.exe / pwsh.exe to run the command in a new console.
+    # No -EncodedCommand: often flagged by EDR, and unreadable in the logs.
     param(
         [Parameter(Mandatory)][string]$CommandText,
         [string]$Title,
@@ -270,12 +285,12 @@ function New-LaunchArgumentString {
 
     $statements = [System.Collections.Generic.List[string]]::new()
     if ($Title) { $statements.Add('$Host.UI.RawUI.WindowTitle = ' + (ConvertTo-PSQuotedString $Title)) }
-    # -WorkingDirectory est ignoré par un lancement élevé : on se place explicitement
+    # -WorkingDirectory is ignored by an elevated launch: the location is set explicitly
     if ($WorkingDirectory) {
         $statements.Add('Set-Location -LiteralPath ' + (ConvertTo-PSQuotedString $WorkingDirectory))
     }
-    # Rappel de la commande dans la console (Write-Host : affichage seul, rien dans le pipeline).
-    # Tronqué au-delà d'une certaine taille : la commande figure deux fois dans la ligne de commande.
+    # Echo of the command in the console (Write-Host: display only, nothing in the pipeline).
+    # Truncated beyond a certain length: the command appears twice on the command line.
     $echo = 'PS> ' + $CommandText
     $maxEcho = $script:Settings.MaxEchoLength
     if ($echo.Length -gt $maxEcho) { $echo = $echo.Substring(0, $maxEcho) + ' [...]' }
@@ -292,7 +307,7 @@ function New-LaunchArgumentString {
 }
 
 function Get-PreferredEdition {
-    # Édition imposée par #Requires (Core, Desktop) ou $null.
+    # Edition forced by #Requires (Core, Desktop), or $null.
     param([Parameter(Mandatory)]$ScriptInfo)
 
     $requirements = $ScriptInfo.Requirements
@@ -304,7 +319,7 @@ function Get-PreferredEdition {
 }
 
 function Get-PowerShellEngine {
-    # Moteurs disponibles : Windows PowerShell 5.1 et PowerShell 7+ (pwsh) s'il est installé.
+    # Available engines: Windows PowerShell 5.1, and PowerShell 7+ (pwsh) when it is installed.
     $engines = [System.Collections.Generic.List[object]]::new()
     if ($env:SystemRoot) {
         $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -327,15 +342,15 @@ function Get-PowerShellEngine {
             $version = (Get-Item -LiteralPath $pwshPath).VersionInfo.ProductVersion -replace '[\s+].*$', ''
             if ($version) { $label = "PowerShell $version" }
         }
-        catch { Write-Verbose "Version de pwsh illisible : $($_.Exception.Message)" }
+        catch { Write-Verbose "Unreadable pwsh version: $($_.Exception.Message)" }
         $engines.Add([pscustomobject]@{ Name = $label; Path = $pwshPath; Edition = 'Core' })
     }
     $engines.ToArray()
 }
 
 function Resolve-NetworkPath {
-    # Lecteur réseau mappé -> chemin UNC : une console élevée ne voit pas les lecteurs mappés
-    # de la session non élevée (jeton différent).
+    # Mapped network drive -> UNC path: an elevated console does not see the mapped drives of
+    # the non-elevated session (different token).
     param([Parameter(Mandatory)][string]$Path)
 
     if ($Path -match '^([A-Za-z]):') {
@@ -348,7 +363,7 @@ function Resolve-NetworkPath {
 }
 
 function Start-ScriptProcess {
-    # Lance le moteur PowerShell dans une nouvelle console (ShellExecute), élevée si demandé.
+    # Starts the PowerShell engine in a new console (ShellExecute), elevated when requested.
     param(
         [Parameter(Mandatory)][string]$FilePath,
         [Parameter(Mandatory)][string]$Arguments,
@@ -359,7 +374,7 @@ function Start-ScriptProcess {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $FilePath
     $startInfo.Arguments = $Arguments
-    $startInfo.UseShellExecute = $true          # nouvelle fenêtre de console + verbe runas
+    $startInfo.UseShellExecute = $true          # new console window + runas verb
     if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
     if ($Elevate) { $startInfo.Verb = 'runas' }
     [void][System.Diagnostics.Process]::Start($startInfo)
