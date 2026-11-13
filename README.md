@@ -227,3 +227,6 @@ Search by name, folder or synopsis (case- and accent-insensitive):
 
 While not mandatory, a credit is always appreciated — mention **Arnaud FERRIERE**
 ([surlesnuages.fr](https://surlesnuages.fr)) if you want to thank me :)
+
+GitHub renders a **Cite this repository** button (APA, BibTeX) from the
+[`CITATION.cff`](CITATION.cff) file shipped at the root of this repository.
