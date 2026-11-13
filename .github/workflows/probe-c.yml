@@ -1,0 +1,17 @@
+name: Probe C
+on: push
+jobs:
+  c:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - label: PS5
+            shell: powershell
+          - label: PS7
+            shell: pwsh
+    steps:
+      - name: Echo
+        shell: pwsh
+        run: |
+          Write-Host 'probe C ok'
