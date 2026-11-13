@@ -1,0 +1,18 @@
+name: Probe B
+on: push
+jobs:
+  b:
+    name: B (${{ matrix.label }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - label: PS5
+            shell: powershell
+          - label: PS7
+            shell: pwsh
+    steps:
+      - name: Echo
+        shell: ${{ matrix.shell }}
+        run: |
+          Write-Host 'probe B ok'
