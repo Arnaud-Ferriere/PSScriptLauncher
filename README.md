@@ -98,11 +98,13 @@ your translated files attached, if you would rather not touch Git.**
    `Invoke-Pester -Path .\PSScriptLauncher\Tests`: the catalogs, the keys referenced by the code
    and the number formatting (`0.5` vs `0,5`) are already checked.
 5. Open a pull request against `main`. If Git is not your thing, open an issue and attach the
-   `.psd1` files: they will be integrated for you.
+   `.psd1` files: I will integrate them for you.
 
 Nothing to install to get started: in the GitHub web interface, **Add file → Create new file**
-and type `PSScriptLauncher/Lang/de/window.psd1` — the slashes create the folders — then GitHub
+and type `PSScriptLauncher/Lang/de/window.psd1` (the slashes create the folders) then GitHub
 offers to open the pull request for you.
+
+Thanks !
 
 ![French interface](Docs/screenshot-french.png)
 
@@ -117,7 +119,7 @@ parameters whose name suggests a secret (`Password`, `Token`, `Secret`, `ApiKey`
 
 ## Writing scripts that display well
 
-The launcher follows the `Get-Help` rules. A few points make the difference:
+The launcher follows the `Get-Help` rules. They can get pesky, so a few points will make all the difference:
 
 ```powershell
 #Requires -Version 5.1
@@ -150,7 +152,7 @@ param(
 - Leave **a blank line** between `#Requires` (or any other comment) and the help block.
 - Place the help block **before** `using` statements.
 - If the script starts with a function, leave **two blank lines** between the help and the function,
-  otherwise `Get-Help` assigns the help to the function.
+  otherwise `Get-Help` assigns the help to the function. Don't ask me 🤷
 
 ## Development
 
@@ -222,3 +224,6 @@ Search by name, folder or synopsis (case- and accent-insensitive):
 ## License
 
 [MIT](LICENSE).
+
+While not mandatory, a credit is always appreciated — mention **Arnaud FERRIERE**
+([surlesnuages.fr](https://surlesnuages.fr)) if you want to thank me :)
