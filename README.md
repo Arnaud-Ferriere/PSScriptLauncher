@@ -1,5 +1,7 @@
 # PSScriptLauncher
 
+[![Tests](https://github.com/Arnaud-Ferriere/PSScriptLauncher/actions/workflows/tests.yml/badge.svg)](https://github.com/Arnaud-Ferriere/PSScriptLauncher/actions/workflows/tests.yml)
+
 `Show-Command` and `Get-Help` have made a baby, and the little bugger took steroids.
 It's built on what each script already contains: its `param()` block and its comment-based help.
 The script is self sufficient : no .exe or server to install.
@@ -180,6 +182,10 @@ Tests (Pester 5.2 or later; Windows PowerShell 5.1 ships with Pester 3):
 Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck
 Invoke-Pester -Path .\PSScriptLauncher\Tests
 ```
+
+CI ([`tests.yml`](.github/workflows/tests.yml)) runs on every push to `main` and on pull requests:
+Pester on **Windows PowerShell 5.1 and PowerShell 7**, PSScriptAnalyzer with the repository settings,
+and a check that every `.ps1`/`.psm1`/`.psd1` stays UTF-8 with BOM and CRLF.
 
 Static analysis:
 

@@ -231,7 +231,8 @@ Describe 'Folder inventory' {
     It 'rejects a path that is not a folder' {
         InModuleScope PSScriptLauncher -Parameters @{ File = (Join-Path $script:CatalogRoot 'Root.ps1') } {
             param($File)
-            { Get-ScriptCatalog -Root $File } | Should -Throw
+            $notAFolder = $File
+            { Get-ScriptCatalog -Root $notAFolder } | Should -Throw
         }
     }
 
