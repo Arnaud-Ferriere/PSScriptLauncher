@@ -14,34 +14,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pester:
-    name: Pester (${{ matrix.label }})
+  tests:
+    name: Pester, PSScriptAnalyzer and file encoding
     runs-on: windows-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Windows PowerShell 5.1
-            shell: powershell
-            slug: ps51
-          - label: PowerShell 7
-            shell: pwsh
-            slug: ps7
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Pester
-        shell: ${{ matrix.shell }}
+      - name: Install Pester for Windows PowerShell 5.1
+        shell: powershell
         run: |
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module -Name Pester -MinimumVersion 5.6.1 -Scope CurrentUser -Force -SkipPublisherCheck
           Import-Module Pester -MinimumVersion 5.6.1 -Force
-          'Pester ' + (Get-Module Pester).Version
+          'Pester ' + (Get-Module Pester).Version + ' on ' + $PSVersionTable.PSVersion
+
+      - name: Install Pester for PowerShell 7
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.6.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          Import-Module Pester -MinimumVersion 5.6.1 -Force
+          'Pester ' + (Get-Module Pester).Version + ' on ' + $PSVersionTable.PSVersion
 
       - name: Check UTF-8 BOM and CRLF
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         run: |
           $bad = @()
           foreach ($file in Get-ChildItem -Recurse -File -Include *.ps1, *.psm1, *.psd1) {
@@ -59,8 +57,10 @@ jobs:
           }
           Write-Host 'Encoding check OK'
 
-      - name: Run Pester
-        shell: ${{ matrix.shell }}
+      - name: Run Pester on Windows PowerShell 5.1
+        id: ps51
+        continue-on-error: true
+        shell: powershell
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = './PSScriptLauncher/Tests'
@@ -68,16 +68,42 @@ jobs:
           $config.Output.Verbosity = 'Detailed'
           $config.TestResult.Enabled = $true
           $config.TestResult.OutputFormat = 'NUnitXml'
-          $config.TestResult.OutputPath = 'testResults.xml'
+          $config.TestResult.OutputPath = 'testResults-ps51.xml'
+          Invoke-Pester -Configuration $config
+
+      - name: Run Pester on PowerShell 7
+        id: ps7
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = './PSScriptLauncher/Tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputFormat = 'NUnitXml'
+          $config.TestResult.OutputPath = 'testResults-ps7.xml'
           Invoke-Pester -Configuration $config
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pester-${{ matrix.slug }}
-          path: testResults.xml
+          name: pester-results
+          path: testResults-*.xml
           if-no-files-found: ignore
+
+      - name: Fail if a Pester run failed
+        if: always()
+        shell: pwsh
+        run: |
+          $ps51 = '${{ steps.ps51.outcome }}'
+          $ps7 = '${{ steps.ps7.outcome }}'
+          Write-Host "Windows PowerShell 5.1: $ps51"
+          Write-Host "PowerShell 7: $ps7"
+          if ($ps51 -ne 'success' -or $ps7 -ne 'success') {
+              throw "Pester failed (Windows PowerShell 5.1: $ps51, PowerShell 7: $ps7)."
+          }
 
   scriptanalyzer:
     name: PSScriptAnalyzer
