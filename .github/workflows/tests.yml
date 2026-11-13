@@ -64,13 +64,19 @@ jobs:
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = './PSScriptLauncher/Tests'
-          $config.Run.Exit = $true
+          $config.Run.PassThru = $true
           $config.Output.Verbosity = 'Detailed'
           $config.TestResult.Enabled = $true
           $config.TestResult.OutputFormat = 'NUnitXml'
           $config.TestResult.OutputPath = 'testResults-ps51.xml'
-          Invoke-Pester -Configuration $config
-
+          $result = Invoke-Pester -Configuration $config
+          $summary = "Windows PowerShell 5.1: $($result.PassedCount) passed, $($result.FailedCount) failed, $($result.SkippedCount) skipped, $($result.TotalCount) total"
+          Write-Host "::notice::$summary"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Windows PowerShell 5.1'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+          if ($result.TotalCount -lt 20) { throw "Only $($result.TotalCount) test(s) ran: the test path is probably wrong." }
+          if ($result.FailedCount -gt 0) { exit 1 }
       - name: Run Pester on PowerShell 7
         id: ps7
         continue-on-error: true
@@ -78,13 +84,19 @@ jobs:
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = './PSScriptLauncher/Tests'
-          $config.Run.Exit = $true
+          $config.Run.PassThru = $true
           $config.Output.Verbosity = 'Detailed'
           $config.TestResult.Enabled = $true
           $config.TestResult.OutputFormat = 'NUnitXml'
           $config.TestResult.OutputPath = 'testResults-ps7.xml'
-          Invoke-Pester -Configuration $config
-
+          $result = Invoke-Pester -Configuration $config
+          $summary = "PowerShell 7: $($result.PassedCount) passed, $($result.FailedCount) failed, $($result.SkippedCount) skipped, $($result.TotalCount) total"
+          Write-Host "::notice::$summary"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### PowerShell 7'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+          if ($result.TotalCount -lt 20) { throw "Only $($result.TotalCount) test(s) ran: the test path is probably wrong." }
+          if ($result.FailedCount -gt 0) { exit 1 }
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
