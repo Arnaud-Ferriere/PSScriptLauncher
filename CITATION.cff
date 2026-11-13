@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use PSScriptLauncher, please cite it as below. While not mandatory, a credit is always appreciated."
+type: software
+title: "PSScriptLauncher"
+abstract: "Graphical launcher (WPF) for the PowerShell scripts of a folder. The form is built from each script's param() block and its comment-based help, and the selected script is launched in a new console."
+authors:
+  - family-names: "FERRIERE"
+    given-names: "Arnaud"
+    website: "https://surlesnuages.fr"
+repository-code: "https://github.com/Arnaud-Ferriere/PSScriptLauncher"
+url: "https://surlesnuages.fr"
+license: MIT
+version: "1.0.0"
+date-released: "2026-11-13"
+keywords:
+  - "PowerShell"
+  - "WPF"
+  - "GUI"
+  - "script launcher"
+  - "comment-based help"

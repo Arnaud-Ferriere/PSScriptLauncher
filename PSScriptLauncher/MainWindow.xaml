@@ -1,0 +1,156 @@
+﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Script launcher" Width="1180" Height="780" MinWidth="900" MinHeight="540"
+        WindowStartupLocation="CenterScreen" FontFamily="Poppins, Segoe UI" FontSize="13"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
+
+  <Grid Margin="18,14,18,18">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="320" MinWidth="220"/>
+      <ColumnDefinition Width="14"/>
+      <ColumnDefinition Width="*" MinWidth="560"/>
+    </Grid.ColumnDefinitions>
+
+    <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="{DynamicResource CardBorderThickness}" CornerRadius="10" Padding="10">
+      <Border.Effect>
+        <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.10" Color="#000000"/>
+      </Border.Effect>
+      <DockPanel>
+      <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+        <TextBox x:Name="SearchBox" Padding="6,4" VerticalContentAlignment="Center"/>
+        <TextBlock x:Name="SearchHint" Text="Search (name, folder, synopsis)   Ctrl+F" Foreground="Gray"
+                   Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+      </Grid>
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+        <Button x:Name="FolderButton" DockPanel.Dock="Right" Content="Folder..." Padding="10,3" Margin="6,0,0,0"
+                ToolTip="Change the folder being analyzed (Ctrl+O)"/>
+        <Button x:Name="RecentButton" DockPanel.Dock="Right" Content="▾" Padding="7,3" Margin="6,0,0,0"
+                ToolTip="Recent folders"/>
+        <TextBlock x:Name="RootText" VerticalAlignment="Center" Foreground="Gray"
+                   TextTrimming="CharacterEllipsis"/>
+      </DockPanel>
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+        <Button x:Name="HelpReportButton" DockPanel.Dock="Right" Content="Help report" Padding="8,2"
+                Margin="6,0,0,0" ToolTip="List the scripts and what their help is missing"/>
+        <ComboBox x:Name="HelpFilterCombo" MinWidth="140" ToolTip="Filter by missing help"/>
+      </DockPanel>
+      <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+        <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Refresh (F5)" Padding="10,3" Margin="6,0,0,0"/>
+        <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="Gray" TextTrimming="CharacterEllipsis"
+                   AutomationProperties.LiveSetting="Polite"/>
+      </DockPanel>
+      <ProgressBar x:Name="ScanProgress" DockPanel.Dock="Bottom" Height="4" Margin="0,6,0,0" Visibility="Collapsed"/>
+      <TreeView x:Name="ScriptTree" Padding="2,4"/>
+      </DockPanel>
+    </Border>
+
+    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Background="Transparent"/>
+
+    <Border Grid.Column="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="{DynamicResource CardBorderThickness}" CornerRadius="10" Padding="12">
+      <Border.Effect>
+        <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.10" Color="#000000"/>
+      </Border.Effect>
+      <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <StackPanel Grid.Row="0" Margin="2,0,0,8">
+        <DockPanel>
+          <Button x:Name="FavoriteButton" DockPanel.Dock="Right" Content="☆ Favorite" Padding="10,3"
+                  VerticalAlignment="Center" IsEnabled="False"/>
+          <ComboBox x:Name="ThemeCombo" DockPanel.Dock="Right" MinWidth="86" Margin="0,0,8,0"
+                    VerticalAlignment="Center" ToolTip="Colour theme"/>
+          <ComboBox x:Name="LanguageCombo" DockPanel.Dock="Right" MinWidth="104" Margin="0,0,8,0"
+                    VerticalAlignment="Center" ToolTip="Interface language"/>
+          <Button x:Name="AccessButton" DockPanel.Dock="Right" Content="Accessibility" Padding="10,3"
+                  Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="Accessibility settings"/>
+          <Button x:Name="ShortcutsButton" DockPanel.Dock="Right" Content="Shortcuts" Padding="10,3"
+                  Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="Keyboard shortcuts"/>
+          <TextBlock x:Name="ScriptTitle" Text="Select a script" FontSize="20" FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+        <TextBlock x:Name="ScriptPath" Foreground="Gray" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+        <TextBlock x:Name="ScriptSynopsis" TextWrapping="Wrap" Margin="0,8,0,0"/>
+        <TextBlock x:Name="ScriptInfo" TextWrapping="Wrap" Foreground="SteelBlue" Margin="0,6,0,0"
+                   Visibility="Collapsed"/>
+        <TextBlock x:Name="ScriptWarning" TextWrapping="Wrap" Foreground="DarkOrange" Margin="0,4,0,0"
+                   Visibility="Collapsed"/>
+        <TextBlock x:Name="HelpGapsText" TextWrapping="Wrap" Foreground="DarkOrange" Margin="0,6,0,0"
+                   Visibility="Collapsed"/>
+      </StackPanel>
+
+      <TabControl x:Name="DetailTabs" Grid.Row="1">
+        <TabItem x:Name="ParamTab" Header="Parameters">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="10,10,16,10">
+              <Border x:Name="DescriptionPanel" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                      Padding="0,0,0,10" Margin="0,0,0,14" Visibility="Collapsed">
+                <TextBlock x:Name="ScriptDescription" TextWrapping="Wrap" Foreground="DimGray"/>
+              </Border>
+              <StackPanel x:Name="SetPanel" Orientation="Horizontal" Margin="0,0,0,14" Visibility="Collapsed">
+                <TextBlock x:Name="SetLabel" Text="Parameter set:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="SetCombo" MinWidth="220"/>
+              </StackPanel>
+              <StackPanel x:Name="ExamplePanel" Orientation="Horizontal" Margin="0,0,0,14" Visibility="Collapsed">
+                <TextBlock x:Name="ExampleLabel" Text="Example:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="ExampleCombo" MinWidth="220" MaxWidth="560"/>
+              </StackPanel>
+              <StackPanel x:Name="ParamPanel"/>
+              <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,10,0,0">
+                <StackPanel>
+                  <WrapPanel>
+                    <CheckBox x:Name="VerboseCheck" Content="-Verbose" Margin="0,0,18,8" Visibility="Collapsed"/>
+                    <CheckBox x:Name="WhatIfCheck" Content="-WhatIf (simulate, no change)"
+                              Margin="0,0,18,8" Visibility="Collapsed"/>
+                  </WrapPanel>
+                  <TextBlock x:Name="ExtraArgsLabel" Text="Extra arguments (added as typed)" Foreground="Gray"
+                             Margin="0,0,0,3"/>
+                  <TextBox x:Name="ExtraArgsBox" FontFamily="Consolas" Padding="4,3"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem x:Name="HelpTab" Header="Help">
+          <TextBox x:Name="HelpText" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" BorderThickness="0"
+                   Padding="10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"/>
+        </TabItem>
+      </TabControl>
+
+      <StackPanel Grid.Row="2" Margin="0,10,0,0">
+        <TextBlock x:Name="CommandLabel" Text="Command" FontWeight="SemiBold" Margin="0,0,0,3"/>
+        <TextBox x:Name="CommandBox" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" Padding="6,4"
+                 MinHeight="46" MaxHeight="120" VerticalScrollBarVisibility="Auto"/>
+        <!-- The controls flow and wrap (a wide font, or a large text size, would otherwise clip
+             the labels), while Run stays pinned to the right edge. -->
+        <Grid Margin="0,8,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <WrapPanel Grid.Column="0" Orientation="Horizontal">
+            <TextBlock x:Name="EngineLabel" Text="Engine:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <ComboBox x:Name="EngineCombo" MinWidth="170" Margin="0,2,10,2" VerticalAlignment="Center"/>
+            <CheckBox x:Name="NoExitCheck" Content="Keep the console open" IsChecked="True"
+                      VerticalAlignment="Center" Margin="0,2,10,2"/>
+            <CheckBox x:Name="NoProfileCheck" Content="No profile" IsChecked="True"
+                      VerticalAlignment="Center" Margin="0,2,10,2"/>
+            <CheckBox x:Name="ElevateCheck" Content="Run as administrator" VerticalAlignment="Center" Margin="0,2,10,2"/>
+            <Button x:Name="ResetButton" Content="Clear input" Padding="10,4" Margin="0,2,6,2" IsEnabled="False"/>
+            <Button x:Name="EditButton" Content="Edit" Padding="10,4" Margin="0,2,6,2" IsEnabled="False"/>
+            <Button x:Name="LocateButton" Content="Show location" Padding="10,4" Margin="0,2,6,2" IsEnabled="False"/>
+            <Button x:Name="CopyButton" Content="Copy" Padding="10,4" Margin="0,2,6,2" IsEnabled="False"/>
+          </WrapPanel>
+          <Button x:Name="RunButton" Grid.Column="1" Content="Run" Padding="22,4" Margin="10,2,0,2"
+                  VerticalAlignment="Center" FontWeight="SemiBold" IsEnabled="False"/>
+        </Grid>
+      </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
