@@ -46,7 +46,9 @@ The script is self-sufficient: nothing to install, no .exe, no server.
   gaps) while the inventory silently re-reads the files that changed.
 - **Recent folders**: the launcher reopens the last folder you used, and a small menu keeps the six
   last ones one click away. Each folder keeps its own cache, so switching back is instant.
-- **Search** by name, folder or synopsis, ignoring case and accents.
+- **Global search** in the name, the folder, the synopsis, the description, the parameters and
+  their descriptions, the examples and the rest of the help block, ignoring case and accents.
+  Results are grouped by what matched, so a script never shows up without a reason.
 - **Favorites and recent scripts**, kept per user and pinned at the top of the tree.
 
 ### Filling the form
@@ -72,6 +74,8 @@ The script is self-sufficient: nothing to install, no .exe, no server.
 - **Help diagnostics**: a help block that `Get-Help` ignores because of a formatting detail (missing
   blank line after `#Requires`, help placed after `using`...) is still displayed, with a warning
   that tells you what to fix.
+- **Unknown help sections**: a single `.TAG`-style section that `Get-Help` does not know makes it
+  ignore the whole block. The launcher shows the help anyway and names the sections to remove.
 - **Help audit**: a filter keeps only the scripts whose help lacks something (synopsis, description,
   example, or parameter descriptions) and the **Help report** lists them all in one window. See
   [Help report](#help-report) below.

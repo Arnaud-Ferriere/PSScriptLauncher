@@ -19,4 +19,5 @@
     # Arguments lus dans un exemple que le formulaire ne peut pas réutiliser.
     'analysis.example.unnamed'                      = '{0} (argument sans nom)'
     'analysis.example.unknownParameter'             = '-{0} (paramètre inconnu du formulaire)'
+    'analysis.warning.unknownHelpSection' = "Bloc d'aide ignoré par Get-Help : section(s) inconnue(s) {0}. À supprimer ou à renommer."
 }

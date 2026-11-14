@@ -833,6 +833,104 @@ Describe 'Keyboard shortcuts' {
     }
 }
 
+Describe 'Help search' {
+    BeforeAll {
+        $script:SearchScript = New-TestScript -Name 'Search.ps1' -Content @'
+<#
+.SYNOPSIS
+    Does a very specific thing.
+.DESCRIPTION
+    Reads the mailbox of the user.
+.PARAMETER Quota
+    Mailbox size, in gigabytes.
+.EXAMPLE
+    PS C:\> .\Search.ps1 -Quota 10
+.NOTES
+    Reserved for the platform team.
+#>
+param(
+    [int]$Quota = 5
+)
+'@
+        $script:SearchInfo = InModuleScope PSScriptLauncher -Parameters @{ Path = $script:SearchScript } {
+            param($Path)
+            Get-ScriptInfo -LiteralPath $Path -RelativePath 'Search.ps1'
+        }
+    }
+
+    It 'finds terms in the parameters, the examples and the raw help block' {
+        InModuleScope PSScriptLauncher -Parameters @{ Info = $script:SearchInfo } {
+            param($Info)
+            (Test-ScriptFilter -ScriptInfo $Info -Filter 'gigabytes') | Should -BeTrue
+            (Test-ScriptFilter -ScriptInfo $Info -Filter 'Quota') | Should -BeTrue
+            (Test-ScriptFilter -ScriptInfo $Info -Filter 'platform') | Should -BeTrue
+            (Test-ScriptFilter -ScriptInfo $Info -Filter 'nothing-matches-this') | Should -BeFalse
+        }
+    }
+
+    It 'says where the match comes from, and stays silent for the name' {
+        InModuleScope PSScriptLauncher -Parameters @{ Info = $script:SearchInfo } {
+            param($Info)
+            (Get-ScriptMatchReason -ScriptInfo $Info -Filter 'gigabytes') |
+                Should -Be (Get-UiText 'search.match.parameter' -Arguments @('Quota'))
+            (Get-ScriptMatchReason -ScriptInfo $Info -Filter 'platform') |
+                Should -Be (Get-UiText 'search.match.help')
+            (Get-ScriptMatchReason -ScriptInfo $Info -Filter 'specific') | Should -Be ''
+        }
+    }
+
+    It 'sorts each result into the group of the field that matched' {
+        InModuleScope PSScriptLauncher -Parameters @{ Info = $script:SearchInfo } {
+            param($Info)
+            (Get-ScriptMatchKind -ScriptInfo $Info -Filter 'specific') | Should -Be 'name'
+            (Get-ScriptMatchKind -ScriptInfo $Info -Filter 'gigabytes') | Should -Be 'parameter'
+            (Get-ScriptMatchKind -ScriptInfo $Info -Filter 'platform') | Should -Be 'help'
+            (Get-ScriptMatchKind -ScriptInfo $Info -Filter 'nothing-matches-this') | Should -Be ''
+        }
+    }
+
+    It 'still searches after a cache reload' {
+        $cachePath = Join-Path (Join-Path $TestDrive 'search-cache') 'cache.json'
+        $null = New-Item -ItemType Directory -Path (Split-Path -Parent $cachePath) -Force
+        InModuleScope PSScriptLauncher -Parameters @{ Root = $TestDrive; CachePath = $cachePath } {
+            param($Root, $CachePath)
+            $empty = Read-CatalogCache -Path $CachePath -Root $Root
+            $catalog = Get-ScriptCatalog -Root $Root -Cache $empty
+            Save-CatalogCache -Path $CachePath -Cache $catalog.Cache
+            $cache = Read-CatalogCache -Path $CachePath -Root $Root
+            $reloaded = Get-ScriptCatalog -Root $Root -Cache $cache
+            $fromCache = @($reloaded.Scripts | Where-Object { $_.FromCache -and $_.BaseName -eq 'Search' })[0]
+            $fromCache | Should -Not -BeNullOrEmpty
+            (Test-ScriptFilter -ScriptInfo $fromCache -Filter 'gigabytes') | Should -BeTrue
+            (Test-ScriptFilter -ScriptInfo $fromCache -Filter 'platform') | Should -BeTrue
+        }
+    }
+}
+
+Describe 'Unknown help sections' {
+    It 'warns about a section Get-Help does not know, and still shows the help' {
+        $path = New-TestScript -Name 'BadTag.ps1' -Content @'
+<#
+.SYNOPSIS
+    Has a strange section.
+.TAG
+    Invented by someone.
+.DESCRIPTION
+    Still readable.
+#>
+param([string]$Path)
+'@
+        InModuleScope PSScriptLauncher -Parameters @{ Path = $path } {
+            param($Path)
+            $info = Get-ScriptInfo -LiteralPath $Path -RelativePath 'BadTag.ps1'
+            @($info.Warnings).Count | Should -BeGreaterThan 0
+            (@($info.Warnings) -join ' ') | Should -Match '\.TAG'
+            $info.Synopsis | Should -Be 'Has a strange section.'
+            $info.Description | Should -Be 'Still readable.'
+        }
+    }
+}
+
 Describe 'Accessibility' {
     It 'keeps every text colour readable in both palettes' {
         InModuleScope PSScriptLauncher {

@@ -136,6 +136,7 @@ function New-ScriptTreeItem {
     $item = [System.Windows.Controls.TreeViewItem]::new()
     $header = [System.Windows.Controls.TextBlock]::new()
     $header.Text = $Entry.BaseName
+    $header.TextTrimming = [System.Windows.TextTrimming]::CharacterEllipsis
     $itemStatus = ''
     if ((Get-ScriptWarningCount -ScriptInfo $Entry) -gt 0) {
         $header.Foreground = Get-ThemeBrush 'Warning'
@@ -152,6 +153,7 @@ function New-ScriptTreeItem {
     $item.Header = $header
     $item.Tag = $Entry
     $toolTip = if ($Entry.Synopsis) { $Entry.Synopsis } else { Get-UiText 'window.tree.noHelp' }
+
     if ($ShowLocation) { $toolTip = $Entry.RelativePath + [Environment]::NewLine + $toolTip }
     $item.ToolTip = $toolTip
     $item
@@ -302,29 +304,63 @@ function Update-ScriptTree {
         Add-PinnedSection -Title (Get-UiText 'window.section.recents') -Path $userState.Recents.ToArray() -ScriptByPath $scriptByPath
     }
 
-    # Folders first, sorted segment by segment, then the scripts of each folder
-    $directories = [string[]]@(
-        $scripts | ForEach-Object { $_.RelativeDirectory } | Where-Object { $_ } | Select-Object -Unique)
-    if ($directories.Count -gt 0) {
-        # Sort key: separator replaced by U+0001, so that "A\B" sorts before "A-C"
-        $keys = [string[]]@($directories | ForEach-Object { $_ -replace '[\\/]', [string][char]1 })
-        [Array]::Sort($keys, $directories, [System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($directory in $directories) {
-            [void](Get-TreeFolderNode -Cache $folders -RelativeDirectory $directory -Expand $expand)
+    if ($isFiltered) {
+        # Searching: results are grouped by the field that matched. The reason is written once, as a
+        # heading, so rows stay short and nothing needs a horizontal scroll.
+        $order = @('name', 'description', 'parameter', 'example', 'help')
+        $byKind = [ordered]@{}
+        foreach ($entry in $scripts) {
+            $kind = Get-ScriptMatchKind -ScriptInfo $entry -Filter $filter
+            if (-not $kind) { $kind = 'name' }
+            if (-not $byKind.Contains($kind)) { $byKind[$kind] = [System.Collections.Generic.List[object]]::new() }
+            $byKind[$kind].Add($entry)
+        }
+        $currentPath = if ($script:State.Current) { $script:State.Current.Path } else { $null }
+        $currentItem = $null
+        foreach ($kind in $order) {
+            if (-not $byKind.Contains($kind)) { continue }
+            $entries = @($byKind[$kind] | Sort-Object -Property Name)
+            $group = [System.Windows.Controls.TreeViewItem]::new()
+            $groupHeader = [System.Windows.Controls.TextBlock]::new()
+            $groupHeader.Text = Get-UiText ('search.group.' + $kind) -Arguments @($entries.Count)
+            $groupHeader.FontWeight = [System.Windows.FontWeights]::SemiBold
+            $groupHeader.TextTrimming = [System.Windows.TextTrimming]::CharacterEllipsis
+            $group.Header = $groupHeader
+            $group.IsExpanded = $true
+            foreach ($entry in $entries) {
+                $childItem = New-ScriptTreeItem -Entry $entry
+                [void]$group.Items.Add($childItem)
+                if ($currentPath -and $entry.Path -eq $currentPath) { $currentItem = $childItem }
+            }
+            [void]$tree.Items.Add($group)
         }
     }
-    $currentPath = if ($script:State.Current) { $script:State.Current.Path } else { $null }
-    $currentItem = $null
-    foreach ($entry in @($scripts | Sort-Object -Property Name)) {
-        $item = New-ScriptTreeItem -Entry $entry
-        if ($entry.RelativeDirectory) {
-            $folder = Get-TreeFolderNode -Cache $folders -RelativeDirectory $entry.RelativeDirectory -Expand $expand
-            [void]$folder.Items.Add($item)
+    else {
+        # Folders first, sorted segment by segment, then the scripts of each folder
+        $directories = [string[]]@(
+            $scripts | ForEach-Object { $_.RelativeDirectory } | Where-Object { $_ } | Select-Object -Unique)
+        if ($directories.Count -gt 0) {
+            # Sort key: separator replaced by U+0001, so that "A\B" sorts before "A-C"
+            $keys = [string[]]@($directories | ForEach-Object { $_ -replace '[\\/]', [string][char]1 })
+            [Array]::Sort($keys, $directories, [System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($directory in $directories) {
+                [void](Get-TreeFolderNode -Cache $folders -RelativeDirectory $directory -Expand $expand)
+            }
         }
-        else {
-            [void]$tree.Items.Add($item)
+        $currentPath = if ($script:State.Current) { $script:State.Current.Path } else { $null }
+        $currentItem = $null
+        foreach ($entry in @($scripts | Sort-Object -Property Name)) {
+            $item = New-ScriptTreeItem -Entry $entry
+            if ($entry.RelativeDirectory) {
+                $folder = Get-TreeFolderNode -Cache $folders -RelativeDirectory $entry.RelativeDirectory -Expand $expand
+                [void]$folder.Items.Add($item)
+            }
+            else {
+                [void]$tree.Items.Add($item)
+            }
+            if ($currentPath -and $entry.Path -eq $currentPath) { $currentItem = $item }
         }
-        if ($currentPath -and $entry.Path -eq $currentPath) { $currentItem = $item }
+
     }
     foreach ($key in $previousExpansion.Keys) {
         if ($folders.ContainsKey($key)) { $folders[$key].IsExpanded = $previousExpansion[$key] }
@@ -968,6 +1004,8 @@ function Reset-ScriptDetail {
     $ui.ScriptDescription.Text = ''
     $ui.DescriptionPanel.Visibility = [System.Windows.Visibility]::Collapsed
     $ui.HelpText.Text = ''
+    $ui.SearchMatchText.Text = ''
+    $ui.SearchMatchText.Visibility = [System.Windows.Visibility]::Collapsed
     $ui.SetCombo.Items.Clear()
     $ui.SetPanel.Visibility = [System.Windows.Visibility]::Collapsed
     $ui.ExampleCombo.Items.Clear()
@@ -1015,6 +1053,35 @@ function Show-ScriptDetail {
 
         $ui.HelpText.Text = Format-ScriptHelp -ScriptInfo $ScriptInfo
         $ui.HelpText.ScrollToHome()
+
+        # First match of the current search, highlighted in the help page. The selection stays
+        # inactive, so the caret is not stolen from the search box.
+        $ui.HelpText.IsInactiveSelectionHighlightEnabled = $true
+        $searchTerms = @()
+        if ($script:Ui.SearchBox) { $searchTerms = @(([string]$script:Ui.SearchBox.Text).Trim() -split '\s+' | Where-Object { $_ }) }
+        $firstTerm = if ($searchTerms.Count -gt 0) { $searchTerms[0] } else { '' }
+        $matchIndex = -1
+        if ($firstTerm) {
+            $matchIndex = $ui.HelpText.Text.IndexOf($firstTerm, [System.StringComparison]::CurrentCultureIgnoreCase)
+        }
+        if ($matchIndex -ge 0) { $ui.HelpText.Select($matchIndex, $firstTerm.Length) }
+        else { $ui.HelpText.Select(0, 0) }
+
+        # Why this script came up, spelled out under the synopsis with the sentence that matched
+        $reason = ''
+        $snippet = ''
+        if ($firstTerm) {
+            $reason = Get-ScriptMatchReason -ScriptInfo $ScriptInfo -Filter ([string]$ui.SearchBox.Text)
+            if ($reason) { $snippet = Get-ScriptMatchSnippet -ScriptInfo $ScriptInfo -Filter ([string]$ui.SearchBox.Text) }
+        }
+        if ($reason) {
+            $ui.SearchMatchText.Text = Get-UiText 'window.detail.matchIn' -Arguments @($reason, $snippet)
+            $ui.SearchMatchText.Visibility = [System.Windows.Visibility]::Visible
+        }
+        else {
+            $ui.SearchMatchText.Text = ''
+            $ui.SearchMatchText.Visibility = [System.Windows.Visibility]::Collapsed
+        }
 
         $ui.SetCombo.Items.Clear()
         $script:State.CurrentSet = $ScriptInfo.DefaultParameterSet
@@ -1388,7 +1455,8 @@ function Initialize-LauncherWindow {
         'CommandBox', 'EngineCombo', 'NoExitCheck', 'NoProfileCheck', 'ElevateCheck', 'LocateButton',
         'CopyButton', 'RunButton', 'ResetButton', 'FavoriteButton', 'ScanProgress', 'ExamplePanel', 'ExampleCombo',
         'ParamTab', 'HelpTab', 'SetLabel', 'ExampleLabel', 'ExtraArgsLabel', 'CommandLabel', 'EngineLabel',
-        'HelpFilterCombo', 'HelpReportButton', 'HelpGapsText', 'EditButton', 'AccessButton', 'ShortcutsButton'
+        'HelpFilterCombo', 'HelpReportButton', 'HelpGapsText', 'EditButton', 'AccessButton', 'ShortcutsButton',
+        'SearchMatchText'
     )
     foreach ($name in $names) {
         $element = $script:Window.FindName($name)

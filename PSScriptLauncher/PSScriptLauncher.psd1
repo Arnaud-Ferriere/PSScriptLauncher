@@ -1,6 +1,6 @@
 ﻿@{
     RootModule           = 'PSScriptLauncher.psm1'
-    ModuleVersion        = '1.0.0'
+    ModuleVersion        = '1.1.0'
     GUID                 = '6f0d9a3e-5b1c-4e7a-9a52-3c8f2d7b4e10'
     Author               = 'Arnaud Ferrière'
     Copyright            = '(c) 2026 Arnaud Ferrière. MIT license.'

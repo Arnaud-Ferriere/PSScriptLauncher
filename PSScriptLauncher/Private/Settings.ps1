@@ -17,5 +17,5 @@ $script:Settings = @{
     MaxRecentRoots       = 6         # folders kept in "Recent folders"
     MaxRememberedScript  = 300       # scripts whose last input is kept
     MaxExampleLabel      = 90        # length of an example label in the list
-    CacheVersion         = 5         # bumped when the cached fields change (invalidates old caches)
+    CacheVersion         = 6         # bumped when the cached fields change (invalidates old caches)
 }

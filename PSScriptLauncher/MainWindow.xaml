@@ -41,7 +41,7 @@
                    AutomationProperties.LiveSetting="Polite"/>
       </DockPanel>
       <ProgressBar x:Name="ScanProgress" DockPanel.Dock="Bottom" Height="4" Margin="0,6,0,0" Visibility="Collapsed"/>
-      <TreeView x:Name="ScriptTree" Padding="2,4"/>
+      <TreeView x:Name="ScriptTree" Padding="2,4" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
       </DockPanel>
     </Border>
 
@@ -76,6 +76,7 @@
         </DockPanel>
         <TextBlock x:Name="ScriptPath" Foreground="Gray" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
         <TextBlock x:Name="ScriptSynopsis" TextWrapping="Wrap" Margin="0,8,0,0"/>
+        <TextBlock x:Name="SearchMatchText" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="Collapsed"/>
         <TextBlock x:Name="ScriptInfo" TextWrapping="Wrap" Foreground="SteelBlue" Margin="0,6,0,0"
                    Visibility="Collapsed"/>
         <TextBlock x:Name="ScriptWarning" TextWrapping="Wrap" Foreground="DarkOrange" Margin="0,4,0,0"

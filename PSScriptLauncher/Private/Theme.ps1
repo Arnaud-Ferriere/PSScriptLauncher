@@ -232,7 +232,7 @@ function Set-UiTheme {
     $resources['FocusRingBrush'] = $ring
 
     # Colours that no generic style can guess
-    foreach ($element in 'StatusText', 'RootText', 'SearchHint', 'ScriptPath', 'ScriptDescription') {
+    foreach ($element in 'StatusText', 'RootText', 'SearchHint', 'ScriptPath', 'ScriptDescription', 'SearchMatchText') {
         if ($ui[$element]) { $ui[$element].Foreground = Get-ThemeBrush 'Muted' }
     }
     foreach ($element in 'EngineLabel', 'SetLabel', 'ExampleLabel', 'ExtraArgsLabel') {

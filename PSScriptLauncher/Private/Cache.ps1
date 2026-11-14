@@ -45,8 +45,8 @@ function Test-CachedFile {
 }
 
 function ConvertFrom-CachedScript {
-    # Script information rebuilt from a cache entry: only the fields the tree uses. The detail pane
-    # re-reads the file when the script is selected, so parameters and help are never cached.
+    # Script information rebuilt from a cache entry: the fields the tree uses, plus the raw help block
+    # re-reads the file when the script is selected: parameters and formatted help are not cached.
     param([Parameter(Mandatory)][hashtable]$Entry, [Parameter(Mandatory)][string]$Root)
 
     $relative = [string]$Entry.RelativePath
@@ -59,6 +59,10 @@ function ConvertFrom-CachedScript {
         RelativePath      = $relative
         RelativeDirectory = [System.IO.Path]::GetDirectoryName($relative)
         Synopsis          = [string]$Entry.Synopsis
+        Description       = (Get-HelpSectionText -Text ([string]$Entry.HelpBlock) -Name 'DESCRIPTION')
+        HelpBlock         = [string]$Entry.HelpBlock
+        SearchText        = ([string]$Entry.RelativePath + ' ' + [string]$Entry.Synopsis + ' ' + [string]$Entry.HelpBlock)
+        ParameterHelp     = (Get-HelpParameterSection -Text ([string]$Entry.HelpBlock))
         HelpStatus        = [string]$Entry.HelpStatus
         MissingSynopsis       = [bool]$Entry.MissingSynopsis
         MissingDescription    = [bool]$Entry.MissingDescription
@@ -94,6 +98,7 @@ function Read-CatalogCache {
                 Size         = [long]$entry['Size']
                 RelativePath = [string]$entry['RelativePath']
                 Synopsis     = [string]$entry['Synopsis']
+                HelpBlock    = [string]$entry['HelpBlock']
                 HelpStatus   = [string]$entry['HelpStatus']
                 MissingSynopsis    = [bool]$entry['MissingSynopsis']
                 MissingDescription = [bool]$entry['MissingDescription']

@@ -80,7 +80,7 @@
     None. This script opens a window and returns no object.
 
 .NOTES
-    Version: 1.0.0 (2026-11-13)
+    Version: 1.1.0 (2026-11-14)
 
     Requirements: Windows, Windows PowerShell 5.1 or PowerShell 7+, STA session (default in both
     consoles) and FullLanguage language mode (WPF cannot be used in ConstrainedLanguage). The

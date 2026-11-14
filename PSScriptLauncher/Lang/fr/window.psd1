@@ -114,4 +114,14 @@
     'shortcuts.keys.navigate'         = 'Tab / Maj+Tab'
     'shortcuts.keys.tree'             = 'Flèches'
     'shortcuts.keys.activate'         = 'Espace'
+    'search.match.description'        = 'la description'
+    'search.match.parameter'          = 'le paramètre -{0}'
+    'search.match.example'            = "l'exemple"
+    'search.match.help'               = "le bloc d'aide"
+    'window.detail.matchIn'          = 'Trouvé dans {0} : « {1} »'
+    'search.group.name'               = 'Nom ou dossier ({0})'
+    'search.group.description'        = 'Description ({0})'
+    'search.group.parameter'          = 'Paramètre ({0})'
+    'search.group.example'            = 'Exemple ({0})'
+    'search.group.help'               = "Bloc d'aide ({0})"
 }

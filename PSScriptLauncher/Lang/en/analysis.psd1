@@ -19,4 +19,5 @@
     # Arguments read from an example that the form cannot reuse.
     'analysis.example.unnamed'                      = '{0} (unnamed argument)'
     'analysis.example.unknownParameter'             = '-{0} (parameter unknown to the form)'
+    'analysis.warning.unknownHelpSection' = 'Help block ignored by Get-Help: unknown section(s) {0}. Remove or rename them.'
 }

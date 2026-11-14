@@ -164,6 +164,92 @@ function Get-InlineParameterHelp {
     $result
 }
 
+function Get-KnownHelpSection {
+    # Section keywords Get-Help accepts in a comment-based help block. Anything else makes
+    # GetHelpContent() return nothing at all, so the whole block is invisible.
+    'SYNOPSIS', 'DESCRIPTION', 'PARAMETER', 'EXAMPLE', 'INPUTS', 'OUTPUTS', 'NOTES', 'LINK',
+    'COMPONENT', 'ROLE', 'FUNCTIONALITY', 'FORWARDHELPTARGETNAME', 'FORWARDHELPCATEGORY',
+    'REMOTEHELPRUNSPACE', 'EXTERNALHELP'
+}
+
+function Get-HelpSectionName {
+    # Section keywords present in a help block, upper case, in the order they appear.
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($match in [regex]::Matches($Text, '(?im)^\s*\.([A-Za-z][A-Za-z0-9]*)')) {
+        $name = $match.Groups[1].Value.ToUpperInvariant()
+        if (-not $names.Contains($name)) { $names.Add($name) }
+    }
+    $names
+}
+
+function Find-HelpCommentToken {
+    # The comment block that would carry the script help: before param() and before the first
+    # statement, and holding at least one known section.
+    param(
+        [Parameter(Mandatory)][System.Management.Automation.Language.ScriptBlockAst]$Ast,
+        [System.Management.Automation.Language.Token[]]$Tokens
+    )
+
+    if ($null -eq $Tokens) { return $null }
+    $limit = [int]::MaxValue
+    if ($Ast.ParamBlock) {
+        $limit = $Ast.ParamBlock.Extent.StartOffset
+        foreach ($attribute in $Ast.ParamBlock.Attributes) { $limit = [Math]::Min($limit, $attribute.Extent.StartOffset) }
+    }
+    $statements = @(
+        @($Ast.BeginBlock, $Ast.ProcessBlock, $Ast.EndBlock) |
+            Where-Object { $_ } |
+            ForEach-Object { $_.Statements } |
+            Sort-Object -Property { $_.Extent.StartOffset })
+    if ($statements.Count -gt 0) { $limit = [Math]::Min($limit, $statements[0].Extent.StartOffset) }
+
+    foreach ($token in $Tokens) {
+        if ($token.Extent.StartOffset -ge $limit) { break }
+        if ([string]$token.Kind -ne 'Comment') { continue }
+        if (-not $token.Text.StartsWith('<#', [System.StringComparison]::Ordinal)) { continue }
+        if ($token.Text -match '(?im)^\s*\.(SYNOPSIS|DESCRIPTION|PARAMETER|EXAMPLE|NOTES)\b') { return $token }
+    }
+    $null
+}
+
+function Get-IgnoredHelp {
+    # A help block with an unknown section (.TAG, .BIDULE...) is rejected as a whole by PowerShell:
+    # Get-Help then shows the generated syntax, as if the script had no help at all. We drop the
+    # offending sections, read what remains, and name them so the user can fix the block.
+    param(
+        [Parameter(Mandatory)][System.Management.Automation.Language.ScriptBlockAst]$Ast,
+        [System.Management.Automation.Language.Token[]]$Tokens
+    )
+
+    $token = Find-HelpCommentToken -Ast $Ast -Tokens $Tokens
+    if ($null -eq $token) { return $null }
+
+    $known = @(Get-KnownHelpSection)
+    $unknown = @(Get-HelpSectionName -Text $token.Text | Where-Object { $known -notcontains $_ })
+    if ($unknown.Count -eq 0) { return $null }
+
+    $cleaned = $token.Text
+    foreach ($name in $unknown) {
+        $pattern = '(?ims)^[ \t]*\.' + $name + '\b.*?(?=^[ \t]*\.[A-Za-z]|\z)'
+        $cleaned = [regex]::Replace($cleaned, $pattern, '')
+    }
+    $miniTokens = $null
+    $miniErrors = $null
+    $miniAst = [System.Management.Automation.Language.Parser]::ParseInput(
+        $cleaned + [Environment]::NewLine + [Environment]::NewLine + 'param()', [ref]$miniTokens, [ref]$miniErrors)
+    $help = $null
+    try { $help = $miniAst.GetHelpContent() } catch { Write-Verbose 'Unknown help sections, nothing left to read.' }
+
+    [pscustomobject]@{
+        Help    = $help
+        Unknown = $unknown
+        Block   = $token.Text
+        Reason  = (Get-UiText 'analysis.warning.unknownHelpSection' -Arguments @(($unknown | ForEach-Object { '.' + $_ }) -join ', '))
+    }
+}
+
 function Find-MisplacedHelp {
     # Help block at the top of the script that Get-Help does not attach to it (formatting).
     # Returns the help, read separately, and the probable cause, to show it and report it.
@@ -607,11 +693,21 @@ function Get-ScriptInfo {
     $help = $null
     try { $help = $ast.GetHelpContent() }
     catch { Write-Verbose "Unreadable help in ${LiteralPath}: $($_.Exception.Message)" }
+    # The raw block feeds the help search, and tells us about unrecognised sections
+    $helpToken = Find-HelpCommentToken -Ast $ast -Tokens $tokens
+    $helpBlock = if ($helpToken) { $helpToken.Text } else { '' }
     if ($null -eq $help) {
         $misplaced = Find-MisplacedHelp -Ast $ast -Tokens $tokens
         if ($misplaced) {
             $help = $misplaced.Help
             $warnings.Add($misplaced.Reason)
+        }
+        else {
+            $ignored = Get-IgnoredHelp -Ast $ast -Tokens $tokens
+            if ($ignored) {
+                if ($ignored.Help) { $help = $ignored.Help }
+                $warnings.Add($ignored.Reason)
+            }
         }
     }
 
@@ -705,6 +801,21 @@ function Get-ScriptInfo {
     else { 'partial' }
     if (-not $RelativePath) { $RelativePath = [System.IO.Path]::GetFileName($LiteralPath) }
 
+    # Everything the window can display, as one searchable string: name, folder, synopsis,
+    # description, parameters and their descriptions, examples, and the raw help block (.NOTES,
+    # free comments, even sections Get-Help rejects). Kept in memory only, never in the cache.
+    $searchParts = [System.Collections.Generic.List[string]]::new()
+    $searchParts.Add($RelativePath)
+    $searchParts.Add($synopsis)
+    $searchParts.Add($description)
+    foreach ($parameter in $parameters) {
+        $searchParts.Add($parameter.Name)
+        $searchParts.Add([string]$parameter.Description)
+    }
+    foreach ($example in $examples) { $searchParts.Add([string]$example.Code) }
+    $searchParts.Add($helpBlock)
+    $searchText = (@($searchParts | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' ')
+
     [pscustomobject]@{
         Path                  = $LiteralPath
         Name                  = [System.IO.Path]::GetFileName($LiteralPath)
@@ -714,6 +825,8 @@ function Get-ScriptInfo {
         RelativeDirectory     = [System.IO.Path]::GetDirectoryName($RelativePath)
         Synopsis              = $synopsis
         Description           = $description
+        HelpBlock             = $helpBlock
+        SearchText            = $searchText
         HelpStatus            = $helpStatus
         Help                  = $help
         Examples              = $examples.ToArray()
@@ -840,6 +953,7 @@ function Get-ScriptCatalog {
                     Size         = [long]$file.File.Length
                     RelativePath = $file.Relative
                     Synopsis     = [string]$info.Synopsis
+                    HelpBlock    = [string]$info.HelpBlock
                     HelpStatus   = [string]$info.HelpStatus
                     MissingSynopsis    = [bool]$info.MissingSynopsis
                     MissingDescription = [bool]$info.MissingDescription
@@ -867,6 +981,157 @@ function Get-ScriptCatalog {
     }
 }
 
+function Get-HelpSectionText {
+    # Text of one section of a raw help block (DESCRIPTION, NOTES...), for cached scripts that
+    # keep only the block. Empty when the section is missing.
+    param([AllowEmptyString()][string]$Text, [Parameter(Mandatory)][string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+    $pattern = '(?ims)^[ \t]*\.' + $Name + '[ \t]*(.*?)(?=^[ \t]*\.[A-Za-z]|\z)'
+    $match = [regex]::Match($Text, $pattern)
+    if (-not $match.Success) { return '' }
+    ($match.Groups[1].Value -replace '\s+', ' ').Trim()
+}
+
+function Get-HelpParameterSection {
+    # Parameter descriptions read straight from a raw help block, as Name = text. Used for cached
+    # scripts, where only the block is kept, so they can still say which parameter matched.
+    param([AllowEmptyString()][string]$Text)
+
+    $sections = @{}
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $sections }
+    $pattern = '(?ims)^[ \t]*\.PARAMETER[ \t]+([A-Za-z0-9_-]+)[ \t]*(.*?)(?=^[ \t]*\.[A-Za-z]|\z)'
+    foreach ($match in [regex]::Matches($Text, $pattern)) {
+        $name = $match.Groups[1].Value
+        $body = ($match.Groups[2].Value -replace '\s+', ' ').Trim()
+        if ($name -and -not $sections.ContainsKey($name)) { $sections[$name] = $body }
+    }
+    $sections
+}
+
+function Get-ScriptMatchSnippet {
+    # A short excerpt around the first search term, so the user sees the sentence that matched,
+    # not only the name of the field.
+    param([Parameter(Mandatory)]$ScriptInfo, [string]$Filter)
+
+    if ([string]::IsNullOrWhiteSpace($Filter)) { return '' }
+    $term = @($Filter.Trim() -split '\s+' | Where-Object { $_ })[0]
+    if (-not $term) { return '' }
+
+    # Clean fields first: the raw block is only a fallback, and its section markers make a poor
+    # excerpt
+    $haystacks = @([string]$ScriptInfo.Description)
+    if ($ScriptInfo.ParameterHelp -is [hashtable]) {
+        foreach ($text in $ScriptInfo.ParameterHelp.Values) { $haystacks += [string]$text }
+    }
+    foreach ($parameter in @($ScriptInfo.Parameters)) { $haystacks += [string]$parameter.Description }
+    foreach ($example in @($ScriptInfo.Examples)) { $haystacks += [string]$example.Code }
+    $haystacks += [string]$ScriptInfo.HelpBlock
+
+    $compareInfo = [System.Globalization.CultureInfo]::CurrentCulture.CompareInfo
+    $options = [System.Globalization.CompareOptions]'IgnoreCase, IgnoreNonSpace'
+    foreach ($haystack in $haystacks) {
+        if ([string]::IsNullOrWhiteSpace($haystack)) { continue }
+        $index = $compareInfo.IndexOf($haystack, $term, $options)
+        if ($index -lt 0) { continue }
+        $text = $haystack -replace '\s+', ' '
+        $flat = $compareInfo.IndexOf($text, $term, $options)
+        if ($flat -lt 0) { $flat = 0 }
+        $start = [Math]::Max(0, $flat - 40)
+        $length = [Math]::Min($text.Length - $start, [Math]::Max($term.Length + 60, 60))
+        $snippet = $text.Substring($start, $length).Trim()
+        $snippet = [regex]::Replace($snippet, '\.(SYNOPSIS|DESCRIPTION|PARAMETER|EXAMPLE|NOTES|INPUTS|OUTPUTS|LINK)\b', ' ')
+        $snippet = [regex]::Replace($snippet, '\s{2,}', ' ').Trim()
+        if ($start -gt 0) { $snippet = '…' + $snippet }
+        if ($start + $length -lt $text.Length) { $snippet = $snippet + '…' }
+        return $snippet
+    }
+    ''
+}
+
+function Get-ScriptMatchField {
+    # Where the search matched, once: Kind is name, description, parameter, example or help (empty
+    # when nothing matched), Name carries the parameter name when there is one.
+    param([Parameter(Mandatory)]$ScriptInfo, [string]$Filter)
+
+    if ([string]::IsNullOrWhiteSpace($Filter)) { return $null }
+    $terms = @($Filter.Trim() -split '\s+' | Where-Object { $_ })
+    if ($terms.Count -eq 0) { return $null }
+    $compareInfo = [System.Globalization.CultureInfo]::CurrentCulture.CompareInfo
+    $options = [System.Globalization.CompareOptions]'IgnoreCase, IgnoreNonSpace'
+    $found = {
+        param([string]$Haystack, [string]$Term)
+        if ([string]::IsNullOrWhiteSpace($Haystack)) { return $false }
+        $compareInfo.IndexOf($Haystack, $Term, $options) -ge 0
+    }
+
+    # Name and synopsis are already visible in the tree: their own group
+    $identity = $ScriptInfo.RelativePath + ' ' + $ScriptInfo.Synopsis
+    $allInIdentity = $true
+    foreach ($term in $terms) {
+        if (-not (& $found $identity $term)) { $allInIdentity = $false; break }
+    }
+    if ($allInIdentity) { return @{ Kind = 'name'; Name = '' } }
+
+    foreach ($term in $terms) {
+        if (& $found ([string]$ScriptInfo.Description) $term) { return @{ Kind = 'description'; Name = '' } }
+    }
+
+    # Parameters of a freshly analysed script, or the ones the cache rebuilt from the help block
+    $parameterHelp = @{}
+    if ($ScriptInfo.ParameterHelp -is [hashtable]) { $parameterHelp = $ScriptInfo.ParameterHelp }
+    if ($parameterHelp.Count -eq 0) {
+        foreach ($parameter in @($ScriptInfo.Parameters)) {
+            if ($parameter -and $parameter.PSObject.Properties['Name']) {
+                $parameterHelp[[string]$parameter.Name] = [string]$parameter.Description
+            }
+        }
+    }
+    if ($parameterHelp.Count -eq 0 -and $ScriptInfo.HelpBlock) {
+        $parameterHelp = Get-HelpParameterSection -Text ([string]$ScriptInfo.HelpBlock)
+    }
+    foreach ($term in $terms) {
+        foreach ($name in $parameterHelp.Keys) {
+            if ((& $found ([string]$name) $term) -or (& $found ([string]$parameterHelp[$name]) $term)) {
+                return @{ Kind = 'parameter'; Name = [string]$name }
+            }
+        }
+    }
+
+    foreach ($term in $terms) {
+        foreach ($example in @($ScriptInfo.Examples)) {
+            if (& $found ([string]$example.Code) $term) { return @{ Kind = 'example'; Name = '' } }
+        }
+    }
+    foreach ($term in $terms) {
+        if (& $found ([string]$ScriptInfo.HelpBlock) $term) { return @{ Kind = 'help'; Name = '' } }
+    }
+    @{ Kind = ''; Name = '' }
+}
+
+function Get-ScriptMatchKind {
+    # Group a result belongs to while searching: name, description, parameter, example or help.
+    param([Parameter(Mandatory)]$ScriptInfo, [string]$Filter)
+
+    $field = Get-ScriptMatchField -ScriptInfo $ScriptInfo -Filter $Filter
+    if ($null -eq $field) { return '' }
+    [string]$field.Kind
+}
+
+function Get-ScriptMatchReason {
+    # Label of the match, for the detail pane: never empty when the search matched outside the name.
+    param([Parameter(Mandatory)]$ScriptInfo, [string]$Filter)
+
+    $field = Get-ScriptMatchField -ScriptInfo $ScriptInfo -Filter $Filter
+    if ($null -eq $field) { return '' }
+    switch ([string]$field.Kind) {
+        'description' { return (Get-UiText 'search.match.description') }
+        'parameter' { return (Get-UiText 'search.match.parameter' -Arguments @($field.Name)) }
+        'example' { return (Get-UiText 'search.match.example') }
+        'help' { return (Get-UiText 'search.match.help') }
+        default { return '' }
+    }
+}
 function Test-ScriptFilter {
     # Multi-term search (AND), case- and accent-insensitive.
     param(
@@ -877,7 +1142,9 @@ function Test-ScriptFilter {
     if ([string]::IsNullOrWhiteSpace($Filter)) { return $true }
     $compareInfo = [System.Globalization.CultureInfo]::CurrentCulture.CompareInfo
     $options = [System.Globalization.CompareOptions]'IgnoreCase, IgnoreNonSpace'
-    $haystack = $ScriptInfo.RelativePath + ' ' + $ScriptInfo.Synopsis
+    # Full help text when the script was analysed in this session, name and synopsis otherwise
+    $haystack = [string]$ScriptInfo.SearchText
+    if ([string]::IsNullOrWhiteSpace($haystack)) { $haystack = $ScriptInfo.RelativePath + ' ' + $ScriptInfo.Synopsis }
     foreach ($term in ($Filter.Trim() -split '\s+')) {
         if ($compareInfo.IndexOf($haystack, $term, $options) -lt 0) { return $false }
     }
